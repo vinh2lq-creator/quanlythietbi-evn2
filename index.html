@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống Quản lý Thiết bị An toàn Điện - EVNHCMC</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+
+    <style>
+        :root { --evn-blue: #005288; --evn-blue-dark: #003d66; --evn-blue-hover: #004474; --evn-orange: #f37021; --evn-orange-hover: #d95c15; --bg-light: #f4f7f6; --text-dark: #333; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background-color: var(--bg-light); margin: 0; display: flex; height: 100vh; overflow: hidden; color: var(--text-dark); flex-direction: row; }
+        
+        #syncNotice { display: none; background: #e74c3c; color: white; text-align: center; padding: 12px; font-size: 13px; font-weight: bold; position: fixed; top: 0; left: 0; width: 100%; z-index: 100000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--evn-blue); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; transition: opacity 0.5s; }
+        .login-box { background: white; padding: 40px; border-radius: 8px; text-align: center; color: var(--text-dark); box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-width: 90%; }
+        .login-box img { width: 80px; margin-bottom: 20px; }
+        .login-box h2 { margin-top: 0; color: var(--evn-blue); }
+        .btn-google { background-color: #4285F4; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 20px; display: inline-flex; align-items: center; gap: 10px; }
+        .btn-google:hover { background-color: #357ae8; }
+
+        .mobile-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10; }
+
+        .sidebar { width: 320px; background-color: var(--evn-blue); color: white; display: flex; flex-direction: column; flex-shrink: 0; box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 20; transition: width 0.3s ease, transform 0.3s ease; overflow-x: hidden; }
+        .sidebar.collapsed { width: 0; min-width: 0; }
+        .sidebar-header { width: 320px; padding: 15px 20px; border-bottom: 1px solid var(--evn-blue-dark); text-align: center; background-color: var(--evn-blue-dark); display: flex; align-items: center; justify-content: center; gap: 15px; }
+        .sidebar-header img { width: 40px; height: auto; object-fit: contain; }
+        .sidebar-header-text { text-align: left; flex: 1; }
+        .sidebar-header .brand { color: var(--evn-orange); font-size: 20px; font-weight: bold; letter-spacing: 1px; }
+        .sidebar-header .brand span { color: white; }
+        .sidebar-header .sub-brand { font-size: 11px; font-weight: normal; display: block; margin-top: 3px; letter-spacing: 0.5px; opacity: 0.9; line-height: 1.2; }
+        
+        .user-info-panel { width: 320px; background-color: var(--evn-blue-dark); padding: 10px 20px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #002b4d; border-bottom: 1px solid #002b4d;}
+        .user-info-panel .role-badge { background-color: var(--evn-orange); padding: 2px 6px; border-radius: 3px; font-weight: bold; font-size: 11px; margin-left: 5px;}
+        .btn-logout { background: none; border: 1px solid #7f8c8d; color: #ecf0f1; cursor: pointer; font-size: 12px; padding: 4px 8px; border-radius: 4px; }
+        .btn-logout:hover { background: rgba(255,255,255,0.1); }
+
+        .content-scrollable-sidebar { width: 320px; overflow-y: auto; flex: 1; padding-bottom: 20px; }
+        .content-scrollable-sidebar::-webkit-scrollbar { width: 6px; }
+        .content-scrollable-sidebar::-webkit-scrollbar-thumb { background-color: #7f8c8d; border-radius: 3px; }
+
+        .menu-item-main { padding: 14px 20px; font-weight: bold; cursor: pointer; border-left: 4px solid transparent; transition: background-color 0.2s; font-size: 14px; display: flex; align-items: center; gap: 10px; }
+        .menu-item-main:hover { background-color: var(--evn-blue-hover); }
+        .active { background-color: var(--evn-blue-hover); border-left-color: var(--evn-orange); color: #fff; }
+
+        .menu-group { margin-top: 10px; }
+        .menu-label-container { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px 12px 20px; background-color: var(--evn-blue-hover); border-top: 1px solid var(--evn-blue); border-bottom: 1px solid var(--evn-blue-dark); }
+        .menu-label-text { font-size: 13px; color: var(--evn-orange); text-transform: uppercase; font-weight: bold; cursor: pointer; flex: 1; display: flex; align-items: center; gap: 8px; user-select: none; }
+        .menu-label-text:hover { color: #f1c40f; }
+        .toggle-icon { font-size: 18px; width: 16px; display: inline-block; text-align: center; font-family: monospace; }
+        .submenu { background-color: var(--evn-blue); }
+        .menu-item { padding: 12px 20px 12px 45px; cursor: pointer; border-left: 4px solid transparent; transition: background-color 0.2s; font-size: 13.5px; color: #ecf0f1; display: flex; align-items: center; gap: 8px; line-height: 1.4; }
+        .menu-item .bullet { font-size: 14px; color: #bdc3c7; }
+        .menu-item:hover { background-color: var(--evn-blue-hover); color: #fff; }
+        .menu-item.active { background-color: var(--evn-blue-hover); border-left-color: var(--evn-orange); color: #fff; font-weight: bold; }
+
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background-color: #f8f9fa; width: 100%; position: relative;}
+        .content-scrollable { overflow-y: auto; padding: 25px; flex: 1; display: flex; flex-direction: column; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0; padding-bottom: 15px; flex-wrap: wrap; gap: 10px;}
+        .header-title-container { display: flex; align-items: center; gap: 15px; }
+        .mobile-menu-btn { display: block; background-color: var(--evn-blue); color: white; border: none; font-size: 20px; padding: 6px 12px; border-radius: 4px; cursor: pointer; transition: 0.2s;}
+        .mobile-menu-btn:hover { background-color: var(--evn-orange); }
+        .header h1 { margin: 0; font-size: 22px; color: var(--evn-blue); font-weight: bold; text-transform: uppercase; }
+        .header-buttons { display: flex; gap: 10px; }
+        
+        .dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 25px; }
+        .card { background: white; padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; border-top: 4px solid var(--evn-blue); }
+        .card.green { border-top-color: #2ecc71; }
+        .card.yellow { border-top-color: #f1c40f; }
+        .card.red { border-top-color: #e74c3c; }
+        .card h3 { margin: 0; font-size: 13px; text-transform: uppercase; color: #7f8c8d; }
+        .card p { margin: 10px 0 0; font-size: 26px; font-weight: bold; color: var(--evn-blue); }
+        
+        #dashboardCharts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
+        .chart-box { background: white; padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; align-items: center; }
+        .chart-box h3 { margin-top: 0; font-size: 16px; color: var(--evn-blue); margin-bottom: 20px; width: 100%; text-align: center; border-bottom: 1px solid #ecf0f1; padding-bottom: 10px; font-weight: bold; }
+        .canvas-container { position: relative; height: 300px; width: 100%; }
+
+        #tableView { display: none; background: white; padding: 0 20px 20px 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; flex-direction: column; min-height: 500px; }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; margin-top: 20px; gap: 10px; flex-wrap: wrap; }
+        .search-container { flex: 1; min-width: 250px; display: flex; gap: 5px; }
+        .search-box { flex: 1; padding: 10px 14px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        .btn-scan { background-color: var(--evn-blue-dark); color: white; border: none; padding: 0 15px; border-radius: 4px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 5px; font-weight: bold;}
+        .btn-scan:hover { background-color: var(--evn-orange); }
+
+        .toolbar-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn { padding: 10px 16px; background-color: var(--evn-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; white-space: nowrap; font-weight: bold; transition: background-color 0.2s; }
+        .btn:hover { background-color: var(--evn-blue-dark); }
+        .btn-success { background-color: #27ae60; }
+        .btn-success:hover { background-color: #2ecc71; }
+        .btn-warning { background-color: var(--evn-orange); }
+        .btn-warning:hover { background-color: var(--evn-orange-hover); }
+        .btn-danger { background-color: #e74c3c; padding: 6px 12px; font-size: 12px; }
+        .btn-edit { background-color: #f39c12; padding: 6px 12px; font-size: 12px; margin-right: 3px; }
+        .btn-info { background-color: #3498db; }
+        .btn-info:hover { background-color: #2980b9; }
+
+        .table-container { overflow-x: auto; overflow-y: auto; flex: 1; border: 1px solid #ecf0f1; border-radius: 4px; width: 100%; display: block;}
+        table { width: 100%; min-width: 1200px; border-collapse: collapse; margin: 0; }
+        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #ecf0f1; font-size: 13px; vertical-align: middle; }
+        th { background-color: var(--evn-blue); color: white; font-weight: bold; position: sticky; top: 0; z-index: 2; box-shadow: 0 2px 2px -1px rgba(0,0,0,0.2); white-space: nowrap;}
+        tr:hover { background-color: #f1f4f5; }
+        
+        .group-header-main { background-color: #e2e8f0; color: var(--evn-blue); text-align: left; letter-spacing: 1px; border-left: 4px solid var(--evn-orange); position: sticky; top: 40px; z-index: 1; }
+        .group-header-main td { padding: 10px 15px; border: none; font-weight: bold; text-transform: uppercase; }
+        .group-header-sub { background-color: #f8f9fa; color: var(--text-dark); font-size: 14px; }
+        .group-header-sub td { border-bottom: 2px solid #bdc3c7; color: var(--evn-blue); }
+
+        .status { padding: 5px 8px; border-radius: 3px; font-size: 11px; color: white; display: inline-block; text-align: center; min-width: 85px; font-weight: bold; }
+        .bg-green { background-color: #2ecc71; }
+        .bg-yellow { background-color: #f1c40f; color: #333; }
+        .bg-red { background-color: #e74c3c; }
+        .file-link { color: var(--evn-orange); text-decoration: none; font-weight: bold; display: inline-flex; align-items: center; gap: 4px; word-break: break-word; }
+
+        th.manager-up, td.manager-up { text-align: center; white-space: nowrap; position: sticky; right: 0; z-index: 1;}
+        td.manager-up { background-color: #fff; box-shadow: -3px 0 5px rgba(0,0,0,0.05); }
+        th.manager-up { background-color: var(--evn-blue); z-index: 3; }
+        tr:hover td.manager-up { background-color: #f1f4f5; }
+
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); overflow-y: auto; padding: 20px; }
+        .modal-content { background-color: #fff; margin: 0 auto; padding: 25px; border-radius: 6px; width: 100%; max-width: 600px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 13px; color: var(--evn-blue); }
+        .form-group input[type="text"], .form-group input[type="date"], .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+        .form-group input:disabled, .form-group input[readonly] { background-color: #e9ecef; cursor: not-allowed; color: #7f8c8d; font-weight: bold;}
+        .modal-footer { text-align: right; margin-top: 25px; border-top: 1px solid #ecf0f1; padding-top: 15px; }
+        .btn-cancel { background-color: #95a5a6; margin-right: 10px; }
+
+        #scannerModal { display: none; position: fixed; z-index: 200; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); justify-content: center; align-items: center; flex-direction: column; }
+        #reader { width: 100%; max-width: 500px; background: white; border-radius: 8px; overflow: hidden; }
+
+        #reminderPanel { display: none; background: white; padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 25px; border-left: 4px solid var(--evn-orange); }
+
+        body.role-viewer .manager-up { display: none !important; }
+        body:not(.role-admin) .admin-only { display: none !important; }
+
+        @media (max-width: 992px) { #dashboardCharts { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { position: fixed; left: -320px; top: 0; bottom: 0; height: 100%; max-width: 80%; transition: transform 0.3s ease; width: 320px;}
+            .sidebar.open { transform: translateX(320px); }
+            .sidebar.collapsed { width: 320px; } 
+            .main-content { height: 100vh; }
+            .dashboard-cards { grid-template-columns: 1fr 1fr; }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .search-container { flex-direction: row; }
+            .toolbar-buttons { display: grid; grid-template-columns: 1fr 1fr; }
+            .btn { width: 100%; text-align: center; }
+            .btn-edit { margin-bottom: 5px; width: 100%; }
+            .btn-danger { width: 100%; }
+        }
+        @media (max-width: 480px) { .dashboard-cards { grid-template-columns: 1fr; } .header-buttons { flex-direction: column; width: 100%; } .header .btn { width: 100%; } }
+    </style>
+</head>
+<body>
+
+    <div id="syncNotice">Đang đồng bộ dữ liệu. Vui lòng không đóng trang.</div>
+
+    <div id="loginOverlay">
+        <div class="login-box">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAIpUlEQVR42t2be3BV1RXGf3vvc85NzE1eEBJQEF+VqFWpD0arVnS0tTqj41htO9X2j7bTdsZ/OtNxpp3W1tYf1aHtaKsd22mt0zraKqJVq1SpWgERH4CAITfk5t4kNzf3nn36x8m5uRcJjxo1Z6a/mXvP3mefvdf61lr7rL1PBkY1G/xLwP8J+JdAoI4q19TU3F1ZWfmL/v7+X3me1/z+b2hU0/h7S0vLXxsaxn0xOzvb093dffz925+QAFy/ZMnt7e3t/xwaGuoLw/BPAXAcJ5XJZPKzZ8/e2tHREQSx+4kIwLlz5+9va2u7r7Oz8x/GGIeIeD5+KyoqQiklpVLJv+WWW24+ePDg8/l8Pghjd91VAsrLy3925syZb/m+X01E6r+cM5bneUgpQ0Ssrq4uffnLX7727rvv/l0YhtZV9bsqgDVr1iyZO3fu7r6+vhoAkFJKZoxSSoNznpmZGaxatar4pS99af+bb77ZdxXBrgpw4sSJ6ysqKhYjIoiIlFJiZiKixBgwMyISpdTc3LzshRdeuOr2eUUBCoVCNQAIISDGQERGmZnjOEiMgYiIyGzevHn1ihUrHuzv7z+bZ94VAfL5fNXg4OBlRCScc8QYwRgDIgoADgAiMsYYy7Ksl156acaqVat+3tfXdzzXm6kKcPfdd2/s7OxcSkRSa03OuRgAiIhzDkQE1lrhnJNKqR07djQ+8MADPzl69OiRXHOmIsDLL7+8dO7cufvjO4iIkBGCc47iOGbOuUgppa2trS133nnna/v27eu4EhamJMCtX7913ebNm6/RWmPmEICMMZg5AgAiUkoptNZSKfXMM8+seeKJJzY+9dRTb0/WlkkL8Mwzz1zR1dV1mdaao2HGOQfOOVJKibGxsQCA1pqzLJsopba/+mqb30S7m0gZ/v1k+gO0trYuaGtr2z0wMFCJMQYzC1s/MhEBY6wYIxhjsCwLAODgwYN127Zte2bbtm2vT9SWiQoQhuH9x44d+4UxRjDzZfHnnEutH2VmlFJSSgmUUl2dnbUXXHDB+pdeemlntBsn1A8YGhpafODAgRUiEpWSEAAgIrTWhJknqP2bWbAsC0qpV15+ua6p6YIfvPrqq69OFCC+gXNnz579hjGGmFnEmJ2IUEpRSinOOWw2G0tErC1btsxdtmzZAwcOHHgx1/yJE/Dw4cNLmpub9yulSj0BEUFEiLUGM4sxxkwEaK1JKbWrs1PfcccdO/bt2/fKRAESw+fBwcHbIyKi2eecgxACM4fWGiEixBhmFgBw8+bN1XPnzr2/r6/v7VyFmZAAU1NTq9atW7c5CIIZ7xNggogAAHDOQUpJ4ziOiIjefffdoL+/vw0jR7i3E9Ff/OIXd+Ry/2XvO44zxTAM5xPj682c0loTAFhriTFiZlBK0fHjxxGAVvQkRIRlWcTMU3E5JgRoaGi4qa+vbwER5RJAjEFKqRBj5JyTAIDv+wAABIAxxuP+30Xl5c85/87kBEgmk4tXrFixtVAozCKi3I4A4JxDa43NZjMiIq21UUpRAIBI2nEcY2ZhZomIhO/7YIxJK6Um2R8QQtzz+uuvfxOjcW9ERERorYmIFWN08UoQEcIwxMwQnQYACMMQAICZg5k1EZFSCs65VCaTuS/X4kldgm3bts2eNm3an4vFYooZI8x82S2YmYUxFqXUpNbacRxkZpFSagCAdrsZETnnYFkWiAjGGAghlJRSxHGsJt0F5fP5h1euXPl/RKTG9v8Yc1oREaWURIyRiMg5B8MwDDOzBwA45yAi5JwHMwMACMMwS1S8n42uD7A+n89fuHjx4q1KqQqMc14U04qIorW2OedojEEpRUopIiIRERFROo6DlDKklDKTyeiLL7745729vecnY89VH0Nzc/Md+/bt28jMt1lrEQAoIgJmBmdmMMYgxhjMjAihqakJzEwDAwNYsWLFigULFrwZhmHzZIWYsgCPP/749GXLlj144sSJhVprMMZgWb1wzomISKWUUsoQEQEAFEWB6upqXbNmzf07d+58YLL3z1o7Y17gOM5F7e3tj6Wnp1cEQSCcc5xzDo0xaK1FjBGnBw4iAmMMjY2NpE2bNr0yZcqU+7/5zW+2XknQKW2CnnjiiStvuumml3bt2nX53LlzB7XWvXEcT83n8/VEdB5m1qXSiIicczAMw3L838G2rCzEGF1tbW0sIoyxlX19fd9obW19t1x2lYtQJpO5cPHixdva2to2DQ0N1eTzedd1Xe15Xiql1BwAEBEhIjXGKE+A+F2WZZk4jlUp2VFKyThm51xKRNTU1HRaKbXk0KFDOzFGEe/6b/v27ddfffXVvzhy5Mgl1lrgG+2yU9vQ0IBqB8PDwzLGSMYYSZ/zPC+I47iUMSbGGEgpA+dcIIQgIvR9XxIRHcdhhUJR9DxfSCllURQZl12K3Nraesutt966I7c2+H47r8MwDHzf//k777zzxQ0bNlzr+77NsmwAAEQESinEGInw0y2EAGMstNYIAGitEUIIhBCVUv1BEMRRFHmWYz8/derUWQsXLvzOa6+99naubfH9A/A8ryuO4xXz5s3bOTQ0NL1sYhRjJESEAIAYIxCRmBkhInHOwRiDAIAQQpBSBjMHEUkppQOAiFBdXT3c2dl5W3V19W/y+fwlE0z0Q+d1XbcuTdOVTU1NP2tsbLyEiO4QkR4d1y077lJgZmZmFmMMYRhijIExBlJKYmZijAgAgNbaAQAAwDmH9PR0eNttt31z27ZtO4moe7Iz+9B5rus2xHG8vKenZ2ljY+OOhoaGlcxcZz8vj0u3xRiBmeXouE8IIXDOISIiIiLnHKSUIE9uMMYAYwxnn3320fXr1y/o6Og4iIje/t8vSCl/w7Htb2ZmtwMAcQAAIjI47s8y2QG1tLRccM8993ypWCzOJaKq2H+r/S2Y2bEsi22XWwBAKaVyY1+bHcdRInIYY1xNTEycnD59+uE4jttTqdTAunXrtvf09Lw92bv+Pxbgn+ZfAv4t4B81/g0j/f+X91P90AAAAABJRU5ErkJggg==" alt="EVN Logo">
+            <h2>Hệ thống Quản lý Thiết bị</h2>
+            <p style="margin-bottom: 10px; font-size: 14px; color: #7f8c8d;">Hệ thống bảo mật. Vui lòng đăng nhập đúng tài khoản công ty.</p>
+            <p style="margin-bottom: 20px; font-size: 12px; color: #e74c3c;">Không dùng trình duyệt Zalo/Facebook vì dễ bị lỗi kết nối mạng.</p>
+            <button class="btn-google" onclick="loginWithGoogle()">Đăng nhập bằng Google</button>
+        </div>
+    </div>
+
+    <div class="mobile-overlay" id="mobileOverlay" onclick="toggleSidebar()"></div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAIpUlEQVR42t2be3BV1RXGf3vvc85NzE1eEBJQEF+VqFWpD0arVnS0tTqj41htO9X2j7bTdsZ/OtNxpp3W1tYf1aHtaKsd22mt0zraKqJVq1SpWgERH4CAITfk5t4kNzf3nn36x8m5uRcJjxo1Z6a/mXvP3mefvdf61lr7rL1PBkY1G/xLwP8J+JdAoI4q19TU3F1ZWfmL/v7+X3me1/z+b2hU0/h7S0vLXxsaxn0xOzvb093dffz925+QAFy/ZMnt7e3t/xwaGuoLw/BPAXAcJ5XJZPKzZ8/e2tHREQSx+4kIwLlz5+9va2u7r7Oz8x/GGIeIeD5+KyoqQiklpVLJv+WWW24+ePDg8/l8Pghjd91VAsrLy3925syZb/m+X01E6r+cM5bneUgpQ0Ssrq4uffnLX7727rvv/l0YhtZV9bsqgDVr1iyZO3fu7r6+vhoAkFJKZoxSSoNznpmZGaxatar4pS99af+bb77ZdxXBrgpw4sSJ6ysqKhYjIoiIlFJiZiKixBgwMyISpdTc3LzshRdeuOr2eUUBCoVCNQAIISDGQERGmZnjOEiMgYiIyGzevHn1ihUrHuzv7z+bZ94VAfL5fNXg4OBlRCScc8QYwRgDIgoADgAiMsYYy7Ksl156acaqVat+3tfXdzzXm6kKcPfdd2/s7OxcSkRSa03OuRgAiIhzDkQE1lrhnJNKqR07djQ+8MADPzl69OiRXHOmIsDLL7+8dO7cufvjO4iIkBGCc47iOGbOuUgppa2trS133nnna/v27eu4EhamJMCtX7913ebNm6/RWmPmEICMMZg5AgAiUkoptNZSKfXMM8+seeKJJzY+9dRTb0/WlkkL8Mwzz1zR1dV1mdaao2HGOQfOOVJKibGxsQCA1pqzLJsopba/+mqb30S7m0gZ/v1k+gO0trYuaGtr2z0wMFCJMQYzC1s/MhEBY6wYIxhjsCwLAODgwYN127Zte2bbtm2vT9SWiQoQhuH9x44d+4UxRjDzZfHnnEutH2VmlFJSSgmUUl2dnbUXXHDB+pdeemlntBsn1A8YGhpafODAgRUiEpWSEAAgIrTWhJknqP2bWbAsC0qpV15+ua6p6YIfvPrqq69OFCC+gXNnz579hjGGmFnEmJ2IUEpRSinOOWw2G0tErC1btsxdtmzZAwcOHHgx1/yJE/Dw4cNLmpub9yulSj0BEUFEiLUGM4sxxkwEaK1JKbWrs1PfcccdO/bt2/fKRAESw+fBwcHbIyKi2eecgxACM4fWGiEixBhmFgBw8+bN1XPnzr2/r6/v7VyFmZAAU1NTq9atW7c5CIIZ7xNggogAAHDOQUpJ4ziOiIjefffdoL+/vw0jR7i3E9Ff/OIXd+Ry/2XvO44zxTAM5xPj682c0loTAFhriTFiZlBK0fHjxxGAVvQkRIRlWcTMU3E5JgRoaGi4qa+vbwER5RJAjEFKqRBj5JyTAIDv+wAABIAxxuP+30Xl5c85/87kBEgmk4tXrFixtVAozCKi3I4A4JxDa43NZjMiIq21UUpRAIBI2nEcY2ZhZomIhO/7YIxJK6Um2R8QQtzz+uuvfxOjcW9ERERorYmIFWN08UoQEcIwxMwQnQYACMMQAICZg5k1EZFSCs65VCaTuS/X4kldgm3bts2eNm3an4vFYooZI8x82S2YmYUxFqXUpNbacRxkZpFSagCAdrsZETnnYFkWiAjGGAghlJRSxHGsJt0F5fP5h1euXPl/RKTG9v8Yc1oREaWURIyRiMg5B8MwDDOzBwA45yAi5JwHMwMACMMwS1S8n42uD7A+n89fuHjx4q1KqQqMc14U04qIorW2OedojEEpRUopIiIRERFROo6DlDKklDKTyeiLL7745729vecnY89VH0Nzc/Md+/bt28jMt1lrEQAoIgJmBmdmMMYgxhjMjAihqakJzEwDAwNYsWLFigULFrwZhmHzZIWYsgCPP/749GXLlj144sSJhVprMMZgWb1wzomISKWUUsoQEQEAFEWB6upqXbNmzf07d+58YLL3z1o7Y17gOM5F7e3tj6Wnp1cEQSCcc5xzDo0xaK1FjBGnBw4iAmMMjY2NpE2bNr0yZcqU+7/5zW+2XknQKW2CnnjiiStvuumml3bt2nX53LlzB7XWvXEcT83n8/VEdB5m1qXSiIicczAMw3L838G2rCzEGF1tbW0sIoyxlX19fd9obW19t1x2lYtQJpO5cPHixdva2to2DQ0N1eTzedd1Xe15Xiql1BwAEBEhIjXGKE+A+F2WZZk4jlUp2VFKyThm51xKRNTU1HRaKbXk0KFDOzFGEe/6b/v27ddfffXVvzhy5Mgl1lrgG+2yU9vQ0IBqB8PDwzLGSMYYSZ/zPC+I47iUMSbGGEgpA+dcIIQgIvR9XxIRHcdhhUJR9DxfSCllURQZl12K3Nraesutt966I7c2+H47r8MwDHzf//k777zzxQ0bNlzr+77NsmwAAEQESinEGInw0y2EAGMstNYIAGitEUIIhBCVUv1BEMRRFHmWYz8/derUWQsXLvzOa6+99naubfH9A/A8ryuO4xXz5s3bOTQ0NL1sYhRjJESEAIAYIxCRmBkhInHOwRiDAIAQQpBSBjMHEUkppQOAiFBdXT3c2dl5W3V19W/y+fwlE0z0Q+d1XbcuTdOVTU1NP2tsbLyEiO4QkR4d1y077lJgZmZmFmMMYRhijIExBlJKYmZijAgAgNbaAQAAwDmH9PR0eNttt31z27ZtO4moe7Iz+9B5rus2xHG8vKenZ2ljY+OOhoaGlcxcZz8vj0u3xRiBmeXouE8IIXDOISIiIiLnHKSUIE9uMMYAYwxnn3320fXr1y/o6Og4iIje/t8vSCl/w7Htb2ZmtwMAcQAAIjI47s8y2QG1tLRccM8993ypWCzOJaKq2H+r/S2Y2bEsi22XWwBAKaVyY1+bHcdRInIYY1xNTEycnD59+uE4jttTqdTAunXrtvf09Lw92bv+Pxbgn+ZfAv4t4B81/g0j/f+X91P90AAAAABJRU5ErkJggg==" alt="EVN Logo">
+            <div class="sidebar-header-text">
+                <span class="brand">EVN<span>HCMC</span></span>
+                <span class="sub-brand">HỆ THỐNG QUẢN LÝ THIẾT BỊ</span>
+            </div>
+            <button class="close-sidebar-btn" onclick="toggleSidebar()">×</button>
+        </div>
+
+        <div class="user-info-panel">
+            <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">👤 <span id="userEmailDisplay">Đang tải...</span> <span id="userRoleBadge" class="role-badge"></span></div>
+            <button class="btn-logout" onclick="logout()" title="Đăng xuất">⎋</button>
+        </div>
+
+        <div class="content-scrollable-sidebar">
+            <div id="menuDashboard" class="menu-item-main active" onclick="setFilter('Dashboard')"><span>🏠</span> Trang Chủ</div>
+            <div id="menuAll" class="menu-item-main" onclick="setFilter('All')"><span>⊞</span> Tất cả thiết bị</div>
+            
+            <div class="menu-group">
+                <div class="menu-label-container" onclick="toggleSubmenu('main-Trang-Cu-An-Toan')">
+                    <div class="menu-label-text"><span class="toggle-icon" id="icon-Trang-Cu-An-Toan">▼</span> TRANG CỤ AN TOÀN</div>
+                </div>
+                <div id="main-Trang-Cu-An-Toan" class="submenu" style="display: block;"></div>
+            </div>
+
+            <div class="menu-group">
+                <div class="menu-label-container" onclick="toggleSubmenu('main-Thiet-Bi-Do-Nang')">
+                    <div class="menu-label-text"><span class="toggle-icon" id="icon-Thiet-Bi-Do-Nang">▼</span> THIẾT BỊ ĐO VÀ NÂNG</div>
+                </div>
+                <div id="main-Thiet-Bi-Do-Nang" class="submenu" style="display: block;"></div>
+            </div>
+
+            <div id="menuDamaged" class="menu-item-main" onclick="setFilter('Damaged')" style="color: #ff7675; margin-top: 15px; border-top: 1px solid var(--evn-blue-dark); padding-top: 15px;">
+                <span>🔴</span> Thiết bị quá hạn / hư hỏng
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="content-scrollable">
+            <div class="header">
+                <div class="header-title-container">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()" title="Đóng/Mở Menu">☰</button>
+                    <h1 id="viewTitle">Trang Chủ</h1>
+                </div>
+                <div class="header-buttons">
+                    <button class="btn btn-info admin-only" onclick="viewAuditLogs()" style="margin-right: 10px;">🕒 Lịch sử</button>
+                    <button class="btn manager-up" onclick="openModal()">+ Cập nhật thiết bị mới</button>
+                </div>
+            </div>
+
+            <div id="reminderPanel" class="admin-only">
+                <h3 style="margin-top: 0; color: var(--evn-orange); font-size: 16px;">Tạo Báo Cáo Sắp Hết Hạn</h3>
+                <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 15px;">Tự động xuất danh sách các thiết bị sắp hết hạn (trong 15 ngày) hoặc đã quá hạn. (Hệ thống sẽ bỏ qua các thiết bị đã đánh dấu "Hư hỏng / Không đạt").</p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-success" onclick="downloadWarningReport()" style="background-color: #2ecc71; color: white;">📥 Tải File Danh sách (Excel/CSV)</button>
+                    <button class="btn btn-warning" onclick="copyWarningText()" style="background-color: #0088FF;">📋 Copy Nội dung thông báo (để dán Zalo)</button>
+                </div>
+            </div>
+
+            <div class="dashboard-cards">
+                <div class="card"><h3>Tổng số lượng</h3><p id="countTotal">0</p></div>
+                <div class="card green"><h3>Đạt tiêu chuẩn</h3><p id="countGood" style="color: #2ecc71;">0</p></div>
+                <div class="card yellow"><h3>Sắp đến hạn</h3><p id="countWarning" style="color: #f39c12;">0</p></div>
+                <div class="card red"><h3>Quá hạn / Lỗi KĐ</h3><p id="countDanger" style="color: #e74c3c;">0</p></div>
+            </div>
+
+            <div id="dashboardCharts">
+                <div class="chart-box"><h3>Tỷ lệ Tình trạng Thiết bị</h3><div class="canvas-container"><canvas id="statusChart"></canvas></div></div>
+                <div class="chart-box"><h3>Phân bổ theo Đơn vị quản lý</h3><div class="canvas-container"><canvas id="unitChart"></canvas></div></div>
+            </div>
+
+            <div id="tableView">
+                <div class="toolbar">
+                    <div class="search-container">
+                        <input type="text" id="searchInput" class="search-box" placeholder="Tìm theo mã số, tên..." onkeyup="searchTable()">
+                        <button class="btn-scan" onclick="startScanner()" title="Quét mã vạch/QR bằng Camera">📷 Quét mã</button>
+                    </div>
+                    <div class="toolbar-buttons">
+                        <button class="btn btn-warning" onclick="exportToCSV(false)">Xuất danh sách</button>
+                        <button class="btn btn-success" onclick="exportToCSV(true)">Xuất tất cả</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="equipmentTable">
+                        <thead>
+                            <tr>
+                                <th>Mã QR</th>
+                                <th>Tên thiết bị</th>
+                                <th>Mã số</th>
+                                <th>Đơn vị</th>
+                                <th>Hạn kiểm định</th>
+                                <th>Số biên bản</th>
+                                <th>Số tem</th>
+                                <th>Ghi chú</th>
+                                <th>Trạng thái</th>
+                                <th class="manager-up">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="scannerModal">
+        <div id="reader"></div>
+        <button class="close-scanner" onclick="stopScanner()">Đóng Camera</button>
+    </div>
+
+    <div id="formModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle" style="margin-top:0; color: #005288;">Thêm thiết bị</h2>
+            <input type="hidden" id="itemId">
+            <input type="hidden" id="firebaseDocId">
+            <div class="form-group">
+                <label>Tên thiết bị - dụng cụ (Gõ tên để tự động nhảy Mã số)</label>
+                <input type="text" id="itemName" required placeholder="VD: Bọc dây dẫn nhựa cứng (Class 3)" list="itemNamesList" autocomplete="off">
+                <datalist id="itemNamesList"></datalist>
+            </div>
+            <div class="form-group">
+                <label>Mã trang cụ</label>
+                <input type="text" id="itemCode" required placeholder="Hệ thống sẽ tự tính toán mã số tiếp theo">
+            </div>
+            <div style="display: flex; gap: 15px;">
+                <div class="form-group" style="flex: 1;"><label>Đơn vị quản lý</label>
+                    <select id="itemUnit"><option value="Tổ QLLĐ">Tổ QLLĐ</option><option value="Tổ SC&BD">Tổ SC&BD</option><option value="Tổ KT">Tổ KT</option></select>
+                </div>
+                <div class="form-group" style="flex: 1;"><label>Hạn thử nghiệm tiếp theo</label><input type="date" id="itemDate"></div>
+            </div>
+            <div style="display: flex; gap: 15px;">
+                <div class="form-group" style="flex: 1;"><label>Số biên bản</label><input type="text" id="itemReport"></div>
+                <div class="form-group" style="flex: 1;"><label>Số tem</label><input type="text" id="itemStamp"></div>
+            </div>
+            
+            <div class="form-group" style="background-color: #f8f9fa; padding: 10px; border-radius: 4px; border: 1px dashed #bdc3c7;">
+                <label style="color: var(--evn-orange);">Đính kèm file kết quả (PDF/Ảnh)</label>
+                <input type="file" id="itemFileInput" accept=".pdf,image/*" style="border: none; padding: 5px 0;">
+                <input type="hidden" id="itemFileUrl"> 
+                <div id="uploadProgress" style="font-size: 13px; color: #e74c3c; margin-top: 5px; font-weight: bold;"></div>
+                <div id="currentFile" style="font-size: 13px; color: var(--evn-blue); margin-top: 5px;"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Tình trạng / Phân loại ngoại lệ</label>
+                <select id="itemNote">
+                    <option value="Bình thường">Bình thường</option>
+                    <option value="Hư hỏng">Hư hỏng vật lý</option>
+                    <option value="Thử nghiệm không đạt">Thử nghiệm không đạt</option>
+                    <option value="Không kiểm định được">Không kiểm định được</option>
+                    <option value="Kiểm định/ hiệu chuẩn không đạt">Kiểm định/ hiệu chuẩn không đạt</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Ghi chú tự do</label><input type="text" id="itemExtraNote"></div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" onclick="closeModal()">Hủy bỏ</button>
+                <button class="btn" id="btnSaveData" onclick="saveData()">Lưu thông tin</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="logModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h2 style="margin-top:0; color: var(--evn-blue);">Lịch sử chỉnh sửa hệ thống</h2>
+            <div class="table-container" style="max-height: 400px;">
+                <table style="min-width: 700px;">
+                    <thead>
+                        <tr>
+                            <th>Thời gian</th>
+                            <th>Người thực hiện</th>
+                            <th>Hành động</th>
+                            <th>Tên Thiết bị</th>
+                            <th>Mã số</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="document.getElementById('logModal').style.display='none'">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBmpVQfEwcrsJ_EuKoY_w97NL2mDIRiLms",
+            authDomain: "quanlythietbi-evn.firebaseapp.com",
+            projectId: "quanlythietbi-evn",
+            storageBucket: "quanlythietbi-evn.firebasestorage.app",
+            messagingSenderId: "162727552394",
+            appId: "1:162727552394:web:a930a611949bca850e1473",
+            measurementId: "G-XGFKLH96KB"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        const storage = firebase.storage();
+
+        // ==========================================
+        // CẤU HÌNH PHÂN QUYỀN TRUY CẬP (V45)
+        // ==========================================
+        const ADMIN_EMAILS = [
+            "vinh2lq@gmail.com", 
+            "admin@evnhcmc.vn"
+        ];
+        
+        const MANAGER_EMAILS = [
+            "luuquangvinh1251992@gmail.com",
+            "totruong2@evnhcmc.vn"
+        ];
+
+        const VIEWER_EMAILS = [
+            "nhanvien1@gmail.com"
+        ];
+        // ==========================================
+
+        let currentUser = null, userRole = 'VIEWER'; 
+        let isAdmin = false;
+        let equipmentList = [];
+        let currentFilter = 'Dashboard';
+        let statusChartInst = null, unitChartInst = null;
+        const today = new Date("2026-03-13T00:00:00");
+        let html5QrcodeScanner = null;
+
+        const V28_DATA = [{"id":1,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-062","unit":"Tổ SC&BD","date":"2025-09-08","report":"606660/BBTN-ETC-TB","stamp":"25X02728 / 25X02729","note":"Thử nghiệm không đạt","extraNote":"Cũ + rách","fileLink":""},{"id":2,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-064","unit":"Tổ SC&BD","date":"2025-09-08","report":"606660/BBTN-ETC-TB","stamp":"25X02730 / 25X02731","note":"Thử nghiệm không đạt","extraNote":"Cũ + rách","fileLink":""},{"id":3,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-067","unit":"Tổ SC&BD","date":"2026-09-05","report":"001698/BBTN-ETC-TB","stamp":"26.03451 / 26.03452","note":"Bình thường","extraNote":"","fileLink":""},{"id":4,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-068","unit":"Tổ SC&BD","date":"2025-09-08","report":"606660/BBTN-ETC-TB","stamp":"25X02732 / 25X02733","note":"Thử nghiệm không đạt","extraNote":"Cũ + rách","fileLink":""},{"id":5,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-072","unit":"Tổ SC&BD","date":"2025-09-08","report":"606660/BBTN-ETC-TB","stamp":"25X02734 / 25X02735","note":"Thử nghiệm không đạt","extraNote":"Cũ + rách","fileLink":""},{"id":6,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-075","unit":"Tổ SC&BD","date":"2026-09-05","report":"001698/BBTN-ETC-TB","stamp":"26.03453 / 26.03454","note":"Bình thường","extraNote":"","fileLink":""},{"id":7,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-077","unit":"Tổ SC&BD","date":"2026-03-25","report":"607530/BBTN-ETC-TB","stamp":"25.07359 / 25.07360","note":"Bình thường","extraNote":"","fileLink":""},{"id":8,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-081","unit":"Tổ SC&BD","date":"2026-06-04","report":"610655/BBTN-ETC-TB","stamp":"25.16707 / 25.16708","note":"Bình thường","extraNote":"","fileLink":""},{"id":9,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-082","unit":"Tổ SC&BD","date":"2025-06-06","report":"602905/BBTN-ETC-TB","stamp":"25X02048 / 25X02049","note":"Thử nghiệm không đạt","extraNote":"Cũ + rách","fileLink":""},{"id":10,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-083","unit":"Tổ QLLĐ","date":"2025-06-06","report":"602905/BBTN-ETC-TB","stamp":"25X02050 / 25X02051","note":"Thử nghiệm không đạt","extraNote":"Cũ + rách","fileLink":""},{"id":11,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-084","unit":"Tổ QLLĐ","date":"2026-06-04","report":"610655/BBTN-ETC-TB","stamp":"25.06905 / 25.06906","note":"Bình thường","extraNote":"","fileLink":""},{"id":12,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-085","unit":"Tổ SC&BD","date":"2026-08-05","report":"001265/BBTN-ETC-TB","stamp":"26.01321 / 26.01322","note":"Bình thường","extraNote":"","fileLink":""},{"id":13,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-086","unit":"Tổ QLLĐ","date":"2025-10-17","report":"601030/BBTN-ETC-TB","stamp":"25.10945 / 25.10946","note":"Bình thường","extraNote":"","fileLink":""},{"id":14,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-087","unit":"Tổ SC&BD","date":"2026-08-05","report":"001265/BBTN-ETC-TB","stamp":"26.01323 / 26.01324","note":"Bình thường","extraNote":"","fileLink":""},{"id":15,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-088","unit":"Tổ SC&BD","date":"2026-08-05","report":"001265/BBTN-ETC-TB","stamp":"26.01325 / 26.01326","note":"Bình thường","extraNote":"","fileLink":""},{"id":16,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-089","unit":"Tổ SC&BD","date":"2026-08-05","report":"001265/BBTN-ETC-TB","stamp":"26.01327 / 26.01328","note":"Bình thường","extraNote":"","fileLink":""},{"id":17,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-090","unit":"Tổ SC&BD","date":"2026-08-05","report":"001265/BBTN-ETC-TB","stamp":"26.01329 / 26.01330","note":"Bình thường","extraNote":"","fileLink":""},{"id":18,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-091","unit":"Tổ SC&BD","date":"2026-06-19","report":"611238/BBTN-ETC-TB","stamp":"25.13183 / 25.13184","note":"Bình thường","extraNote":"","fileLink":""},{"id":19,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-092","unit":"Tổ SC&BD","date":"2026-06-19","report":"611238/BBTN-ETC-TB","stamp":"25.13185 / 25.13186","note":"Bình thường","extraNote":"","fileLink":""},{"id":20,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-093","unit":"Tổ SC&BD","date":"2026-06-19","report":"611238/BBTN-ETC-TB","stamp":"25.13187 / 25.13188","note":"Bình thường","extraNote":"","fileLink":""},{"id":21,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-094","unit":"Tổ SC&BD","date":"2026-06-19","report":"611238/BBTN-ETC-TB","stamp":"25.13189 / 25.13190","note":"Bình thường","extraNote":"","fileLink":""},{"id":22,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-095","unit":"Tổ SC&BD","date":"2026-06-19","report":"611238/BBTN-ETC-TB","stamp":"25.13191 / 25.13192","note":"Bình thường","extraNote":"","fileLink":""},{"id":23,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-096","unit":"Tổ SC&BD","date":"2026-06-19","report":"611238/BBTN-ETC-TB","stamp":"25.13193 / 25.13194","note":"Bình thường","extraNote":"","fileLink":""},{"id":24,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-097","unit":"Tổ SC&BD","date":"2026-09-05","report":"001698/BBTN-ETC-TB","stamp":"26.03455 / 26.03456","note":"Bình thường","extraNote":"","fileLink":""},{"id":25,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-098","unit":"Tổ SC&BD","date":"2026-09-05","report":"001698/BBTN-ETC-TB","stamp":"26.03457 / 26.03458","note":"Bình thường","extraNote":"","fileLink":""},{"id":26,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-099","unit":"Tổ SC&BD","date":"2026-09-05","report":"001698/BBTN-ETC-TB","stamp":"26.03459 / 26.03460","note":"Bình thường","extraNote":"","fileLink":""},{"id":27,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-100","unit":"Tổ SC&BD","date":"2026-09-05","report":"001698/BBTN-ETC-TB","stamp":"26.03461 / 26.03462","note":"Bình thường","extraNote":"","fileLink":""},{"id":28,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-101","unit":"Tổ SC&BD","date":"2026-09-05","report":"001698/BBTN-ETC-TB","stamp":"26.03463 / 26.03464","note":"Bình thường","extraNote":"","fileLink":""},{"id":29,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-102","unit":"Tổ SC&BD","date":"2026-06-04","report":"610655/BBTN-ETC-TB","stamp":"25.06907 / 25.06908","note":"Bình thường","extraNote":"","fileLink":""},{"id":30,"name":"Găng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gtt-4CCLD-103","unit":"Tổ QLLĐ","date":"2026-07-09","report":"000265/BBTN-ETC-TB","stamp":"26.00169 / 26.00170","note":"Bình thường","extraNote":"","fileLink":""},{"id":31,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-342","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":32,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-343","unit":"Tổ QLLĐ","date":"2026-02-12","report":"605728/BBTN-ETC-TB","stamp":"25.03765 / 25.03766","note":"Bình thường","extraNote":"","fileLink":""},{"id":33,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-344","unit":"Tổ QLLĐ","date":"2026-02-12","report":"605728/BBTN-ETC-TB","stamp":"25.03767 / 25.03768","note":"Bình thường","extraNote":"","fileLink":""},{"id":34,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-345","unit":"Tổ QLLĐ","date":"2026-02-12","report":"605728/BBTN-ETC-TB","stamp":"25.03769 / 25.03770","note":"Bình thường","extraNote":"","fileLink":""},{"id":35,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-354","unit":"Tổ QLLĐ","date":"2026-02-12","report":"605728/BBTN-ETC-TB","stamp":"25.03771 / 25.03772","note":"Bình thường","extraNote":"","fileLink":""},{"id":36,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-355","unit":"Tổ QLLĐ","date":"2025-08-17","report":"00449/BBTN-ETC-TB","stamp":"25.2289 / 25.2290","note":"Bình thường","extraNote":"","fileLink":""},{"id":37,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-356","unit":"Tổ QLLĐ","date":"2025-08-17","report":"00449/BBTN-ETC-TB","stamp":"25.2291 / 25.2292","note":"Bình thường","extraNote":"","fileLink":""},{"id":38,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-357","unit":"Tổ SC&BD","date":"2025-08-17","report":"00449/BBTN-ETC-TB","stamp":"25.2293 / 25.2294","note":"Bình thường","extraNote":"","fileLink":""},{"id":39,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-358","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":40,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-359","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":41,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-360","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":42,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-361","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":43,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-362","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":44,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-363","unit":"Tổ QLLĐ","date":"2025-08-17","report":"00449/BBTN-ETC-TB","stamp":"25.2295 / 25.2296","note":"Bình thường","extraNote":"","fileLink":""},{"id":45,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-364","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":46,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-365","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":47,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-366","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":48,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-367","unit":"Tổ QLLĐ","date":"2026-08-05","report":"001266/BBTN-ETC-TB","stamp":"26.01343 / 26.01344","note":"Bình thường","extraNote":"","fileLink":""},{"id":49,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-368","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":50,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-369","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":51,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLĐ-183","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":52,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLĐ-184","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":53,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLĐ-197","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":54,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-180","unit":"Tổ QLLĐ","date":"2026-09-05","report":"001699/BBTN-ETC-TB","stamp":"26.03465 / 26.03466","note":"Bình thường","extraNote":"","fileLink":""},{"id":55,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLĐ-192","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":56,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-201","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":57,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-204","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":58,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-318","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":59,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-319","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":60,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-321","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":61,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-326","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":62,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-332","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":63,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-334","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":64,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-337","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":65,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-338","unit":"Tổ SC&BD","date":"2025-10-17","report":"601031/BBTN-ETC-TB","stamp":"25.10947 / 25.10948","note":"Bình thường","extraNote":"","fileLink":""},{"id":66,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-341","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":67,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-346","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":68,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-347","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":69,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-348","unit":"Tổ QLLĐ","date":"2025-10-17","report":"601031/BBTN-ETC-TB","stamp":"25.10949 / 25.10950","note":"Bình thường","extraNote":"","fileLink":""},{"id":70,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-350","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":71,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-DP001","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":72,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-DP002","unit":"Tổ QLLĐ","date":"2025-10-17","report":"601031/BBTN-ETC-TB","stamp":"25.10951 / 25.10952","note":"Bình thường","extraNote":"","fileLink":""},{"id":73,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-DP004","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":74,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-DP005","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":75,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-304","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":76,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-323","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":77,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-324","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":78,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-325","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":79,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-353","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":80,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-370","unit":"Tổ SC&BD","date":"2025-09-08","report":"606663/BBTN-ETC-TB","stamp":"25X02736 / 25X02737","note":"Thử nghiệm không đạt","extraNote":"Cũ + rách","fileLink":""},{"id":81,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-371","unit":"Tổ SC&BD","date":"2026-09-05","report":"001699/BBTN-ETC-TB","stamp":"26.03467 / 26.03468","note":"Bình thường","extraNote":"","fileLink":""},{"id":82,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-372","unit":"Tổ SC&BD","date":"2026-09-05","report":"001699/BBTN-ETC-TB","stamp":"26.03469 / 26.03470","note":"Bình thường","extraNote":"","fileLink":""},{"id":83,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-373","unit":"Tổ SC&BD","date":"2026-09-05","report":"001699/BBTN-ETC-TB","stamp":"26.03471 / 26.03472","note":"Bình thường","extraNote":"","fileLink":""},{"id":84,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-374","unit":"Tổ SC&BD","date":"2026-09-05","report":"001699/BBTN-ETC-TB","stamp":"26.03473 / 26.03474","note":"Bình thường","extraNote":"","fileLink":""},{"id":85,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-375","unit":"Tổ SC&BD","date":"2026-03-22","report":"607357/BBTN-ETC-TB","stamp":"25.04985 / 25.04986","note":"Bình thường","extraNote":"","fileLink":""},{"id":86,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-376","unit":"Tổ SC&BD","date":"2025-09-23","report":"607358/BBTN-ETC-TB","stamp":"25X06086 / 25X06087 / 25X06089","note":"Thử nghiệm không đạt","extraNote":"Cũ + rách","fileLink":""},{"id":87,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-377","unit":"Tổ SC&BD","date":"2025-09-23","report":"607358/BBTN-ETC-TB","stamp":"25X06088","note":"Thử nghiệm không đạt","extraNote":"Cũ + rách","fileLink":""},{"id":88,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-378","unit":"Tổ SC&BD","date":"2026-03-22","report":"607357/BBTN-ETC-TB","stamp":"25.04987 / 25.04988","note":"Bình thường","extraNote":"","fileLink":""},{"id":89,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-379","unit":"Tổ SC&BD","date":"2026-03-22","report":"607357/BBTN-ETC-TB","stamp":"25.04989 / 25.04990","note":"Bình thường","extraNote":"","fileLink":""},{"id":90,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-380","unit":"Tổ SC&BD","date":"2026-03-22","report":"607357/BBTN-ETC-TB","stamp":"25.04991 / 25.04992","note":"Bình thường","extraNote":"","fileLink":""},{"id":91,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-381","unit":"Tổ QLLĐ","date":"2026-03-22","report":"607357/BBTN-ETC-TB","stamp":"25.04993 / 25.04994","note":"Bình thường","extraNote":"","fileLink":""},{"id":92,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-382","unit":"Tổ QLLĐ","date":"2026-03-22","report":"607357/BBTN-ETC-TB","stamp":"25.04995 / 25.04996","note":"Bình thường","extraNote":"","fileLink":""},{"id":93,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-383","unit":"Tổ QLLĐ","date":"2026-05-19","report":"602222/BBTN-ETC-TB","stamp":"25.08991 / 25.08992","note":"Bình thường","extraNote":"","fileLink":""},{"id":94,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-384","unit":"Tổ SC&BD","date":"2026-05-19","report":"602222/BBTN-ETC-TB","stamp":"25.08993 / 25.08994","note":"Bình thường","extraNote":"","fileLink":""},{"id":95,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-385","unit":"Tổ SC&BD","date":"2026-05-19","report":"602222/BBTN-ETC-TB","stamp":"25.08995 / 25.08996","note":"Bình thường","extraNote":"","fileLink":""},{"id":96,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-386","unit":"Tổ SC&BD","date":"2026-05-19","report":"602222/BBTN-ETC-TB","stamp":"25.08997 / 25.08998","note":"Bình thường","extraNote":"","fileLink":""},{"id":97,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-387","unit":"Tổ SC&BD","date":"2026-05-19","report":"602222/BBTN-ETC-TB","stamp":"25.08999 / 25.09000","note":"Bình thường","extraNote":"","fileLink":""},{"id":98,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-388","unit":"Tổ SC&BD","date":"2025-09-29","report":"607531/BBTN-ETC-TB","stamp":"25X06148 / 25X06149","note":"Thử nghiệm không đạt","extraNote":"Cũ + rách","fileLink":""},{"id":99,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-389","unit":"Tổ SC&BD","date":"2026-03-25","report":"607532/BBTN-ETC-TB","stamp":"25.07361 / 25.07362","note":"Bình thường","extraNote":"","fileLink":""},{"id":100,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-390","unit":"Tổ SC&BD","date":"2026-03-25","report":"607532/BBTN-ETC-TB","stamp":"25.07465 / 25.07466","note":"Bình thường","extraNote":"","fileLink":""},{"id":101,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-391","unit":"Tổ SC&BD","date":"2026-03-25","report":"607532/BBTN-ETC-TB","stamp":"25.07467 / 25.07468","note":"Bình thường","extraNote":"","fileLink":""},{"id":102,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-392","unit":"Tổ SC&BD","date":"2026-03-25","report":"607532/BBTN-ETC-TB","stamp":"25.07363 / 25.07364","note":"Bình thường","extraNote":"","fileLink":""},{"id":103,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-393","unit":"Tổ SC&BD","date":"2026-03-25","report":"607532/BBTN-ETC-TB","stamp":"25.07469 / 25.07470","note":"Bình thường","extraNote":"","fileLink":""},{"id":104,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-394","unit":"Tổ SC&BD","date":"2026-03-25","report":"607532/BBTN-ETC-TB","stamp":"25.07365 / 25.07366","note":"Bình thường","extraNote":"","fileLink":""},{"id":105,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-395","unit":"Tổ SC&BD","date":"2026-03-25","report":"607532/BBTN-ETC-TB","stamp":"25.07471 / 25.07472","note":"Bình thường","extraNote":"","fileLink":""},{"id":106,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-396","unit":"Tổ SC&BD","date":"2026-02-12","report":"605723/BBTN-ETC-TB","stamp":"25.03781 / 25.03782","note":"Bình thường","extraNote":"","fileLink":""},{"id":107,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-397","unit":"Tổ SC&BD","date":"2026-02-12","report":"605723/BBTN-ETC-TB","stamp":"25.03783 / 25.03784","note":"Bình thường","extraNote":"","fileLink":""},{"id":108,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-398","unit":"Tổ QLLĐ","date":"2026-02-12","report":"605723/BBTN-ETC-TB","stamp":"25.03785 / 25.03786","note":"Bình thường","extraNote":"","fileLink":""},{"id":109,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-399","unit":"Tổ QLLĐ","date":"2026-02-12","report":"605723/BBTN-ETC-TB","stamp":"25.03787 / 25.03788","note":"Bình thường","extraNote":"","fileLink":""},{"id":110,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-400","unit":"Tổ QLLĐ","date":"2026-05-24","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":111,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-401","unit":"Tổ QLLĐ","date":"2026-05-24","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":112,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-402","unit":"Tổ QLLĐ","date":"2026-05-24","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":113,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-403","unit":"Tổ SC&BD","date":"2026-05-24","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":114,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-404","unit":"Tổ SC&BD","date":"2026-05-24","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":115,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-405","unit":"Tổ SC&BD","date":"2026-05-24","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":116,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-406","unit":"Tổ SC&BD","date":"2026-05-24","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":117,"name":"Găng tay cách điện hạ thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ght-6CCLD-407","unit":"Tổ SC&BD","date":"2026-05-24","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":118,"name":"Ủng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ug-4CCLĐ-009","unit":"Tổ SC&BD","date":"2026-02-12","report":"605731/BBTN-ETC-TB","stamp":"25.03789 / 25.03790","note":"Bình thường","extraNote":"","fileLink":""},{"id":119,"name":"Ủng cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Ug-4CCLĐ-010","unit":"Tổ SC&BD","date":"2026-02-12","report":"605731/BBTN-ETC-TB","stamp":"25.03791 / 25.03792","note":"Bình thường","extraNote":"","fileLink":""},{"id":120,"name":"Ghế cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gg-4CCLĐ-003","unit":"Tổ SC&BD","date":"2027-10-04","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":121,"name":"Ghế cách điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Gg-4CCLĐ-004","unit":"Tổ SC&BD","date":"2027-10-04","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":122,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-036","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":123,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-037","unit":"Tổ SC&BD","date":"2026-03-08","report":"606667/BBTN-ETC-TB","stamp":"25.04825","note":"Bình thường","extraNote":"","fileLink":""},{"id":124,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-038","unit":"Tổ SC&BD","date":"2026-03-08","report":"606667/BBTN-ETC-TB","stamp":"25.04826","note":"Bình thường","extraNote":"","fileLink":""},{"id":125,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-039","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Thử nghiệm không đạt","extraNote":"","fileLink":""},{"id":126,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-040","unit":"Tổ SC&BD","date":"2026-03-08","report":"606667/BBTN-ETC-TB","stamp":"25.04827","note":"Bình thường","extraNote":"","fileLink":""},{"id":127,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-041","unit":"Tổ SC&BD","date":"2026-03-08","report":"606667/BBTN-ETC-TB","stamp":"25.04828","note":"Bình thường","extraNote":"","fileLink":""},{"id":128,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-043","unit":"Tổ SC&BD","date":"2026-03-08","report":"606667/BBTN-ETC-TB","stamp":"25.04829","note":"Bình thường","extraNote":"","fileLink":""},{"id":129,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-044","unit":"Tổ SC&BD","date":"2026-03-08","report":"606667/BBTN-ETC-TB","stamp":"25.04830","note":"Bình thường","extraNote":"","fileLink":""},{"id":130,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-045","unit":"Tổ SC&BD","date":"2026-03-08","report":"606667/BBTN-ETC-TB","stamp":"25.04831","note":"Bình thường","extraNote":"","fileLink":""},{"id":131,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-047","unit":"Tổ SC&BD","date":"2026-03-08","report":"606667/BBTN-ETC-TB","stamp":"25.04832","note":"Bình thường","extraNote":"","fileLink":""},{"id":132,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-048","unit":"Tổ SC&BD","date":"2026-03-08","report":"606667/BBTN-ETC-TB","stamp":"25.04833","note":"Bình thường","extraNote":"","fileLink":""},{"id":133,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-049","unit":"Tổ SC&BD","date":"2026-06-19","report":"611242/BBTN-ETC-TB","stamp":"25.13195","note":"Bình thường","extraNote":"","fileLink":""},{"id":134,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-051","unit":"Tổ SC&BD","date":"2026-06-19","report":"611242/BBTN-ETC-TB","stamp":"25.13196","note":"Bình thường","extraNote":"","fileLink":""},{"id":135,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-052","unit":"Tổ SC&BD","date":"2026-06-19","report":"611242/BBTN-ETC-TB","stamp":"25.13197","note":"Bình thường","extraNote":"","fileLink":""},{"id":136,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-053","unit":"Tổ SC&BD","date":"2026-06-19","report":"611242/BBTN-ETC-TB","stamp":"25.13198","note":"Bình thường","extraNote":"","fileLink":""},{"id":137,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-054","unit":"Tổ SC&BD","date":"2026-06-19","report":"611242/BBTN-ETC-TB","stamp":"25.13199","note":"Bình thường","extraNote":"","fileLink":""},{"id":138,"name":"Đầu thử điện trung thế","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bt-4CCLD-055","unit":"Tổ SC&BD","date":"2026-06-19","report":"611242/BBTN-ETC-TB","stamp":"25.13200","note":"Bình thường","extraNote":"","fileLink":""},{"id":139,"name":"Bọc sứ đứng / đỡ nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsd-4CCLD-001","unit":"Tổ SC&BD","date":"2025-09-05","report":"00669/BBTN-ETC-TB","stamp":"25.2971","note":"Bình thường","extraNote":"","fileLink":""},{"id":140,"name":"Bọc sứ đứng / đỡ nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsd-4CCLD-002","unit":"Tổ SC&BD","date":"2025-09-05","report":"00669/BBTN-ETC-TB","stamp":"25.2972","note":"Bình thường","extraNote":"","fileLink":""},{"id":141,"name":"Bọc sứ đứng / đỡ nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsd-4CCLD-003","unit":"Tổ SC&BD","date":"2025-09-05","report":"00669/BBTN-ETC-TB","stamp":"25.2973","note":"Bình thường","extraNote":"","fileLink":""},{"id":142,"name":"Bọc sứ đứng / đỡ nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsd-4CCLD-004","unit":"Tổ SC&BD","date":"2025-09-05","report":"00669/BBTN-ETC-TB","stamp":"25.2974","note":"Bình thường","extraNote":"","fileLink":""},{"id":143,"name":"Bọc sứ đứng / đỡ nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsd-4CCLD-005","unit":"Tổ SC&BD","date":"2025-09-05","report":"00669/BBTN-ETC-TB","stamp":"25.2975","note":"Bình thường","extraNote":"","fileLink":""},{"id":144,"name":"Bọc sứ đứng / đỡ nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsd-4CCLD-006","unit":"Tổ SC&BD","date":"2025-09-05","report":"00669/BBTN-ETC-TB","stamp":"25.2976","note":"Bình thường","extraNote":"","fileLink":""},{"id":145,"name":"Bọc sứ néo nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsn-4CCLD-001","unit":"Tổ SC&BD","date":"2026-03-08","report":"606670/BBTN-ETC-TB","stamp":"25.04840","note":"Bình thường","extraNote":"","fileLink":""},{"id":146,"name":"Bọc sứ néo nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsn-4CCLD-002","unit":"Tổ SC&BD","date":"2026-03-08","report":"606670/BBTN-ETC-TB","stamp":"25.04841","note":"Bình thường","extraNote":"","fileLink":""},{"id":147,"name":"Bọc sứ néo nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsn-4CCLD-003","unit":"Tổ SC&BD","date":"2026-03-08","report":"606670/BBTN-ETC-TB","stamp":"25.04842","note":"Bình thường","extraNote":"","fileLink":""},{"id":148,"name":"Bọc sứ néo nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsn-4CCLD-007","unit":"Tổ SC&BD","date":"2025-10-17","report":"601032/BBTN-ETC-TB","stamp":"25.10953","note":"Bình thường","extraNote":"","fileLink":""},{"id":149,"name":"Bọc sứ néo nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsn-4CCLD-008","unit":"Tổ SC&BD","date":"2025-10-17","report":"601032/BBTN-ETC-TB","stamp":"25.10954","note":"Bình thường","extraNote":"","fileLink":""},{"id":150,"name":"Bọc sứ néo nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bsn-4CCLD-009","unit":"Tổ SC&BD","date":"2025-10-17","report":"601032/BBTN-ETC-TB","stamp":"25.10955","note":"Bình thường","extraNote":"","fileLink":""},{"id":151,"name":"Sào đo chiều cao đường dây","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-075","unit":"Tổ SC&BD","date":"2026-09-25","report":"607537/BBKD-ETC-TB","stamp":"25K13851","note":"Bình thường","extraNote":"","fileLink":""},{"id":152,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-036","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13836","note":"Bình thường","extraNote":"","fileLink":""},{"id":153,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-037","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13837","note":"Bình thường","extraNote":"","fileLink":""},{"id":154,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-031","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13838","note":"Bình thường","extraNote":"","fileLink":""},{"id":155,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-017","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13839","note":"Bình thường","extraNote":"","fileLink":""},{"id":156,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-018","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13840","note":"Bình thường","extraNote":"","fileLink":""},{"id":157,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-035","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13841","note":"Bình thường","extraNote":"","fileLink":""},{"id":158,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-041","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13842","note":"Bình thường","extraNote":"","fileLink":""},{"id":159,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-046","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13843","note":"Bình thường","extraNote":"","fileLink":""},{"id":160,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-042","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13844","note":"Bình thường","extraNote":"","fileLink":""},{"id":161,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-043","unit":"Tổ QLLĐ","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13845","note":"Bình thường","extraNote":"","fileLink":""},{"id":162,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-044","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13846","note":"Bình thường","extraNote":"","fileLink":""},{"id":163,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-045","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13847","note":"Bình thường","extraNote":"","fileLink":""},{"id":164,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-040","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13848","note":"Bình thường","extraNote":"","fileLink":""},{"id":165,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-047","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13849","note":"Bình thường","extraNote":"","fileLink":""},{"id":166,"name":"Sào thao tác","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-090","unit":"Tổ SC&BD","date":"2026-09-25","report":"607538/BBKD-ETC-TB","stamp":"25K13850","note":"Bình thường","extraNote":"","fileLink":""},{"id":167,"name":"Sào đo chiều cao đường dây","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-076","unit":"Tổ QLLĐ","date":"2026-09-25","report":"607537/BBKD-ETC-TB","stamp":"25K13852","note":"Bình thường","extraNote":"","fileLink":""},{"id":168,"name":"Sào đa năng 02 đầu","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-072","unit":"Tổ SC&BD","date":"2026-09-25","report":"607539/BBKD-ETC-TB","stamp":"25K13543","note":"Bình thường","extraNote":"","fileLink":""},{"id":169,"name":"Sào đa năng 02 đầu","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-073","unit":"Tổ SC&BD","date":"2026-09-25","report":"607539/BBKD-ETC-TB","stamp":"25K13544","note":"Bình thường","extraNote":"","fileLink":""},{"id":170,"name":"Sào đa năng 02 đầu","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-074","unit":"Tổ SC&BD","date":"2026-09-25","report":"607539/BBKD-ETC-TB","stamp":"25K13545","note":"Bình thường","extraNote":"","fileLink":""},{"id":171,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-048","unit":"Tổ SC&BD","date":"2026-12-04","report":"610657/BBKD-ETC-TB","stamp":"25K28873","note":"Bình thường","extraNote":"","fileLink":""},{"id":172,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-049","unit":"Tổ SC&BD","date":"2026-12-04","report":"610657/BBKD-ETC-TB","stamp":"25K28874","note":"Bình thường","extraNote":"","fileLink":""},{"id":173,"name":"Sào thao tác","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-110","unit":"Tổ SC&BD","date":"2026-12-04","report":"610657/BBKD-ETC-TB","stamp":"25K28875","note":"Bình thường","extraNote":"","fileLink":""},{"id":174,"name":"Sào thao tác","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-111","unit":"Tổ SC&BD","date":"2026-12-04","report":"610657/BBKD-ETC-TB","stamp":"25K28876","note":"Bình thường","extraNote":"","fileLink":""},{"id":175,"name":"Sào thao tác (2 khúc)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-112","unit":"Tổ SC&BD","date":"2026-12-04","report":"610657/BBKD-ETC-TB","stamp":"25K28877","note":"Bình thường","extraNote":"","fileLink":""},{"id":176,"name":"Sào thao tác (2 khúc)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-113","unit":"Tổ SC&BD","date":"2026-12-04","report":"610657/BBKD-ETC-TB","stamp":"25K28878","note":"Bình thường","extraNote":"","fileLink":""},{"id":177,"name":"Sào thao tác rút","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-114","unit":"Tổ QLLĐ","date":"2026-03-17","report":"00985/BBTN-ETC-TB","stamp":"25K05490","note":"Bình thường","extraNote":"","fileLink":""},{"id":178,"name":"Sào thao tác rút","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-115","unit":"Tổ SC&BD","date":"2026-03-17","report":"00985/BBTN-ETC-TB","stamp":"25K05491","note":"Bình thường","extraNote":"","fileLink":""},{"id":179,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-021","unit":"Tổ SC&BD","date":"2026-04-09","report":"600636/BBKD-ETC-TB","stamp":"25K05465","note":"Bình thường","extraNote":"","fileLink":""},{"id":180,"name":"Sào đo chiều cao đường dây","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-077","unit":"Tổ QLLĐ","date":"2026-06-06","report":"602902/BBKD-ETC-TB","stamp":"25K11484","note":"Bình thường","extraNote":"","fileLink":""},{"id":181,"name":"Sào thao tác","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-116","unit":"Tổ SC&BD","date":"2026-04-09","report":"600636/BBKD-ETC-TB","stamp":"25K05466","note":"Bình thường","extraNote":"","fileLink":""},{"id":182,"name":"Sào thao tác","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-117","unit":"Tổ SC&BD","date":"2026-04-09","report":"600636/BBKD-ETC-TB","stamp":"25K05467","note":"Bình thường","extraNote":"","fileLink":""},{"id":183,"name":"Sào thao tác","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-118","unit":"Tổ SC&BD","date":"2026-04-09","report":"600636/BBKD-ETC-TB","stamp":"25K05468","note":"Bình thường","extraNote":"","fileLink":""},{"id":184,"name":"Sào tiếp địa","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sd-4CCLD-050","unit":"Tổ SC&BD","date":"2026-04-09","report":"600636/BBKD-ETC-TB","stamp":"25K05469","note":"Bình thường","extraNote":"","fileLink":""},{"id":185,"name":"Sào thao tác rút","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-119","unit":"Tổ SC&BD","date":"2026-07-02","report":"604098/BBKD-ETC-TB","stamp":"25K15557","note":"Bình thường","extraNote":"","fileLink":""},{"id":186,"name":"Sào thao tác rút","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-120","unit":"Tổ SC&BD","date":"2026-07-02","report":"604098/BBKD-ETC-TB","stamp":"25K15558","note":"Bình thường","extraNote":"","fileLink":""},{"id":187,"name":"Sào thao tác rút","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-121","unit":"Tổ SC&BD","date":"2026-07-02","report":"604098/BBKD-ETC-TB","stamp":"25K15559","note":"Bình thường","extraNote":"","fileLink":""},{"id":188,"name":"Sào thao tác rút","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-122","unit":"Tổ SC&BD","date":"2026-07-02","report":"604098/BBKD-ETC-TB","stamp":"25K15560","note":"Bình thường","extraNote":"","fileLink":""},{"id":189,"name":"Sào thao tác rút (6 khúc)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-123","unit":"Tổ SC&BD","date":"2026-07-02","report":"604098/BBKD-ETC-TB","stamp":"25K15561","note":"Bình thường","extraNote":"","fileLink":""},{"id":190,"name":"Sào thao tác rút (6 khúc)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-124","unit":"Tổ SC&BD","date":"2026-07-02","report":"604098/BBKD-ETC-TB","stamp":"25K15562","note":"Bình thường","extraNote":"","fileLink":""},{"id":191,"name":"Sào thao tác rút (6 khúc)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-125","unit":"Tổ SC&BD","date":"2026-12-04","report":"610657/BBKD-ETC-TB","stamp":"25K28879","note":"Bình thường","extraNote":"","fileLink":""},{"id":192,"name":"Sào thao tác rút (6 khúc)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Sc-4CCLD-126","unit":"Tổ QLLĐ","date":"2026-07-15","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":193,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-001","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07367","note":"Bình thường","extraNote":"","fileLink":""},{"id":194,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-002","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07368","note":"Bình thường","extraNote":"","fileLink":""},{"id":195,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-003","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07369","note":"Bình thường","extraNote":"","fileLink":""},{"id":196,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-004","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07370","note":"Bình thường","extraNote":"","fileLink":""},{"id":197,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-005","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07371","note":"Bình thường","extraNote":"","fileLink":""},{"id":198,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-007","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07372","note":"Bình thường","extraNote":"","fileLink":""},{"id":199,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-008","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07373","note":"Bình thường","extraNote":"","fileLink":""},{"id":200,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-009","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07374","note":"Bình thường","extraNote":"","fileLink":""},{"id":201,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-010","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07375","note":"Bình thường","extraNote":"","fileLink":""},{"id":202,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-011","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07376","note":"Bình thường","extraNote":"","fileLink":""},{"id":203,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-012","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07377","note":"Bình thường","extraNote":"","fileLink":""},{"id":204,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-013","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07378","note":"Bình thường","extraNote":"","fileLink":""},{"id":205,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-014","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07379","note":"Bình thường","extraNote":"","fileLink":""},{"id":206,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-015","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07380","note":"Bình thường","extraNote":"","fileLink":""},{"id":207,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-016","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07381","note":"Bình thường","extraNote":"","fileLink":""},{"id":208,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-018","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07382","note":"Bình thường","extraNote":"","fileLink":""},{"id":209,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-019","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07383","note":"Bình thường","extraNote":"","fileLink":""},{"id":210,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-020","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07384","note":"Bình thường","extraNote":"","fileLink":""},{"id":211,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-033","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07385","note":"Bình thường","extraNote":"","fileLink":""},{"id":212,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-034","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07386","note":"Bình thường","extraNote":"","fileLink":""},{"id":213,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-035","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07387","note":"Bình thường","extraNote":"","fileLink":""},{"id":214,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-036","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07388","note":"Bình thường","extraNote":"","fileLink":""},{"id":215,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-038","unit":"Tổ SC&BD","date":"2026-03-25","report":"607534/BBTN-ETC-TB","stamp":"25.07389","note":"Bình thường","extraNote":"","fileLink":""},{"id":216,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-040","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07390","note":"Bình thường","extraNote":"","fileLink":""},{"id":217,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-041","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07391","note":"Bình thường","extraNote":"","fileLink":""},{"id":218,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-042","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07392","note":"Bình thường","extraNote":"","fileLink":""},{"id":219,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-043","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07393","note":"Bình thường","extraNote":"","fileLink":""},{"id":220,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-044","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07394","note":"Bình thường","extraNote":"","fileLink":""},{"id":221,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-045","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07395","note":"Bình thường","extraNote":"","fileLink":""},{"id":222,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-049","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07396","note":"Bình thường","extraNote":"","fileLink":""},{"id":223,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-050","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07397","note":"Bình thường","extraNote":"","fileLink":""},{"id":224,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-051","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07398","note":"Bình thường","extraNote":"","fileLink":""},{"id":225,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-052","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07399","note":"Bình thường","extraNote":"","fileLink":""},{"id":226,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-053","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07400","note":"Bình thường","extraNote":"","fileLink":""},{"id":227,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-055","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07401","note":"Bình thường","extraNote":"","fileLink":""},{"id":228,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-056","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07609","note":"Bình thường","extraNote":"","fileLink":""},{"id":229,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-058","unit":"Tổ SC&BD","date":"2025-09-25","report":"01119/BBTN-ETC-TB","stamp":"25.4214","note":"Bình thường","extraNote":"","fileLink":""},{"id":230,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-059","unit":"Tổ SC&BD","date":"2025-09-25","report":"01119/BBTN-ETC-TB","stamp":"25.4215","note":"Bình thường","extraNote":"","fileLink":""},{"id":231,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-060","unit":"Tổ SC&BD","date":"2025-09-25","report":"01119/BBTN-ETC-TB","stamp":"25.4216","note":"Bình thường","extraNote":"","fileLink":""},{"id":232,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-061","unit":"Tổ SC&BD","date":"2025-09-25","report":"01119/BBTN-ETC-TB","stamp":"25.4217","note":"Bình thường","extraNote":"","fileLink":""},{"id":233,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-062","unit":"Tổ SC&BD","date":"2025-09-25","report":"01119/BBTN-ETC-TB","stamp":"25.4218","note":"Bình thường","extraNote":"","fileLink":""},{"id":234,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-063","unit":"Tổ SC&BD","date":"2025-09-25","report":"01119/BBTN-ETC-TB","stamp":"25.4219","note":"Bình thường","extraNote":"","fileLink":""},{"id":235,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-064","unit":"Tổ SC&BD","date":"2025-09-25","report":"01119/BBTN-ETC-TB","stamp":"25.4220","note":"Bình thường","extraNote":"","fileLink":""},{"id":236,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-065","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07617","note":"Bình thường","extraNote":"","fileLink":""},{"id":237,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-066","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07618","note":"Bình thường","extraNote":"","fileLink":""},{"id":238,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-067","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07619","note":"Bình thường","extraNote":"","fileLink":""},{"id":239,"name":"Bọc dây dẫn nhựa cứng (Class 3)","category":"Trang Cụ An Toàn","mainCategory":"Trang Cụ An Toàn","code":"Bc-4CCLD-068","unit":"Tổ SC&BD","date":"2026-03-25","report":"607536/BBTN-ETC-TB","stamp":"25.07620","note":"Bình thường","extraNote":"","fileLink":""},{"id":240,"name":"Sào đo dòng điện (phần tín hiệu)","category":"Sào đo dòng điện (phần tín hiệu)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"St-4CCLD-015","unit":"Tổ QLLĐ","date":"2025-10-17","report":"601033/BBTN-ETC-TB","stamp":"25.10956","note":"Bình thường","extraNote":"","fileLink":""},{"id":241,"name":"Sào đo dòng điện (phần tín hiệu)","category":"Sào đo dòng điện (phần tín hiệu)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"St-4CCLD-016","unit":"Tổ SC&BD","date":"2025-10-17","report":"601033/BBTN-ETC-TB","stamp":"25.10957","note":"Bình thường","extraNote":"","fileLink":""},{"id":242,"name":"Sào đo dòng điện (phần tín hiệu)","category":"Sào đo dòng điện (phần tín hiệu)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"St-4CCLD-017","unit":"Tổ QLLĐ","date":"2025-10-17","report":"601033/BBTN-ETC-TB","stamp":"25.10958","note":"Bình thường","extraNote":"","fileLink":""},{"id":243,"name":"Sào đo dòng điện (phần tín hiệu)","category":"Sào đo dòng điện (phần tín hiệu)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"St-4CCLD-018","unit":"Tổ SC&BD","date":"2025-10-17","report":"601033/BBTN-ETC-TB","stamp":"25.10959","note":"Bình thường","extraNote":"","fileLink":""},{"id":244,"name":"Sào đo dòng điện (phần tín hiệu)","category":"Sào đo dòng điện (phần tín hiệu)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"St-4CCLD-019","unit":"Tổ QLLĐ","date":"2024-11-02","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":245,"name":"Sào đo dòng điện (phần tín hiệu)","category":"Sào đo dòng điện (phần tín hiệu)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"St-4CCLD-020","unit":"Tổ SC&BD","date":"2027-01-06","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":246,"name":"Sào đo dòng điện (phần tín hiệu)","category":"Sào đo dòng điện (phần tín hiệu)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"St-4CCLD-021","unit":"Tổ QLLĐ","date":"2026-07-31","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":247,"name":"Ampe kìm (2000A) SEW","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:1760413","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":248,"name":"Ampe kìm (2000A) SEW","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:1635904","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":249,"name":"Ampe kìm ( 2000A) SEW","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:1636976","unit":"Tổ QLLĐ","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":250,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W81661853","unit":"Tổ QLLĐ","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":251,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8078831","unit":"Tổ QLLĐ","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":252,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8161851","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":253,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8291457","unit":"Tổ QLLĐ","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":254,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8301789","unit":"Tổ SC&BD","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":255,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8368611","unit":"Tổ SC&BD","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":256,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8368610","unit":"Tổ SC&BD","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":257,"name":"Ampe kìm (PC-6011SD) CE","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:493945","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":258,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8092423","unit":"Tổ SC&BD","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":259,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8161850","unit":"Tổ SC&BD","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":260,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8340939","unit":"Tổ SC&BD","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":261,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8079091","unit":"Tổ QLLĐ","date":"2026-05-26","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":262,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8390815","unit":"Tổ QLLĐ","date":"2026-11-26","report":"KT3-01865ADE5/1","stamp":"W8390815","note":"Bình thường","extraNote":"","fileLink":""},{"id":263,"name":"Ampe kìm (2000A) KYORITSU","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"W8390811","unit":"Tổ QLLĐ","date":"2026-11-26","report":"KT3-01865ADE5/2","stamp":"W8390811","note":"Bình thường","extraNote":"","fileLink":""},{"id":264,"name":"Ampe kìm 1000A","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No.1862020","unit":"Tổ QLLĐ","date":"2026-11-25","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":265,"name":"Ampe kìm 1000A","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No.1862021","unit":"Tổ QLLĐ","date":"2026-11-25","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":266,"name":"Ampe kìm 1000A","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No.1862022","unit":"Tổ QLLĐ","date":"2026-11-25","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":267,"name":"Ampe kìm 1000A","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No.1862023","unit":"Tổ QLLĐ","date":"2026-11-25","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":268,"name":"Ampe kìm 1000A","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No.1862024","unit":"Tổ SC&BD","date":"2026-11-25","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":269,"name":"Ampe kìm 1000A","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No.1862028","unit":"Tổ SC&BD","date":"2026-11-25","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":270,"name":"Ampe kìm cose đa năng","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No.250999827","unit":"Tổ QLLĐ","date":"2026-11-25","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":271,"name":"Ampe kìm cose đa năng","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No.250999829","unit":"Tổ SC&BD","date":"2026-11-25","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":272,"name":"Ampe kìm cose đa năng","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No.250999810","unit":"Tổ KT","date":"2026-11-25","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":273,"name":"Ampe kìm trung thế","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"SN: 296287 và SN: 296272","unit":"Tổ SC&BD","date":"2027-01-06","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":274,"name":"Ampe kìm trung thế","category":"Thiết bị đo Ampe kìm","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"SN: 298526 và SN: 298579","unit":"Tổ QLLĐ","date":"2026-07-31","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":275,"name":"Máy đo coss φ","category":"Máy đo coss φ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No: 801013817","unit":"Tổ QLLĐ","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":276,"name":"Máy đo coss φ/ SN: 0102ADE7/2","category":"Máy đo coss φ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:081010/SN: 0102ADE7/2","unit":"Tổ QLLĐ","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":277,"name":"Máy đo coss φ","category":"Máy đo coss φ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:130300707","unit":"Tổ SC&BD","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":278,"name":"Máy đo coss φ","category":"Máy đo coss φ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:140622146","unit":"Tổ QLLĐ","date":"2026-02-22","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":279,"name":"Máy đo điện trở đất","category":"Máy đo điện trở đất","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:W8044400","unit":"Tổ QLLĐ","date":"2026-03-31","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":280,"name":"Máy đo điện trở đất","category":"Máy đo điện trở đất","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:W8036128","unit":"Tổ QLLĐ","date":"2025-03-31","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":281,"name":"Máy đo điện trở đất","category":"Máy đo điện trở đất","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:ST 191116958B4","unit":"Tổ QLLĐ","date":"2026-03-31","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":282,"name":"Máy đo điện trở đất","category":"Máy đo điện trở đất","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:ST 190916905B4","unit":"Tổ QLLĐ","date":"2026-03-31","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":283,"name":"Máy đo điện trở đất","category":"Máy đo điện trở đất","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:W8238096","unit":"Tổ SC&BD","date":"2026-02-11","report":"KT3-00148ADE5/1","stamp":"KT3-00148ADE5/1","note":"Bình thường","extraNote":"","fileLink":""},{"id":284,"name":"Máy đo điện trở dất","category":"Máy đo điện trở đất","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:8112852","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":285,"name":"Máy đo điện trở dất","category":"Máy đo điện trở đất","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:8112860","unit":"Tổ SC&BD","date":"2026-02-28","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":286,"name":"Máy đo điện trở dất","category":"Máy đo điện trở đất","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No: W8125197","unit":"Tổ QLLĐ","date":"2026-05-31","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":287,"name":"Camera nhiệt  (Fluke-T1401)","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"TI401P 20060399","unit":"Tổ SC&BD","date":"2026-02-21","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":288,"name":"Camera nhiệt Ti90 (Fluke)","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"TI-90-14069022","unit":"Tổ SC&BD","date":"2026-02-21","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":289,"name":"Nhiệt kế hồng ngoại (FLIR)","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"SN:278010097","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":290,"name":"Nhiệt kế hồng ngoại (FLIR)","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"1821199","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":291,"name":"Camera nhiệt  (Fluke-T1401)","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"TI401P 20020172","unit":"Tổ SC&BD","date":"2026-02-21","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":292,"name":"Camera nhiệt (FLUKE)","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:15120026","unit":"Tổ QLLĐ","date":"2026-06-02","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":293,"name":"Camera nhiệt (FLUKE)","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:10590023","unit":"Tổ QLLĐ","date":"2026-06-02","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":294,"name":"Camera nhiệt (testo)","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:63870781","unit":"Tổ QLLĐ","date":"2026-06-02","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":295,"name":"Máy chụp ảnh nhiệt (máy đo nhiệt độ)","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"TI480P-20080358","unit":"Tổ QLLĐ","date":"2026-06-02","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":296,"name":"Camera nhiệt  FLUKE-TI450","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No: 18100192","unit":"Tổ QLLĐ","date":"2025-12-26","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":297,"name":"Camera nhiệt  FLUKE-TI401P","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No: 20060693","unit":"Tổ QLLĐ","date":"2025-12-26","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":298,"name":"Máy chụp ảnh nhiệt (máy đo nhiệt độ)","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"TI480P-22090166","unit":"Tổ QLLĐ","date":"2026-06-30","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":299,"name":"Máy chụp ảnh nhiệt (máy đo nhiệt độ)","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"TI480P-22100027","unit":"Tổ QLLĐ","date":"2025-10-23","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":300,"name":"Camera nhiệt  FLUKE-TI401P","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"TI401P-20020168","unit":"Tổ QLLĐ","date":"2026-03-18","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":301,"name":"Camera nhiệt  FLUKE-TI27","category":"Thiết bị đo nhiệt độ","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"TI27-15090052","unit":"Tổ QLLĐ","date":"2026-03-18","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":302,"name":"Gigaomh mét 250v (Kyroritsu)","category":"Gigaomh mét 250v (Kyroritsu)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No: E0101942","unit":"Tổ SC&BD","date":"2026-03-31","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":303,"name":"Gigaomh mét 250v (Kyroritsu)","category":"Gigaomh mét 250v (Kyroritsu)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"1499391","unit":"Tổ SC&BD","date":"2026-03-31","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":304,"name":"Gigaohm mét 250v (Kyroritsu)","category":"Gigaomh mét 250v (Kyroritsu)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"E0101941","unit":"Tổ SC&BD","date":"2026-03-31","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":305,"name":"Máy đo điện trở 1 chiều","category":"Máy đo điện trở 1 chiều","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No: 130527400","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":306,"name":"Máy đo điện trở 1 chiều","category":"Máy đo điện trở 1 chiều","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No: 181032580","unit":"Tổ SC&BD","date":"2026-03-29","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":307,"name":"Máy đo điện trở nước","category":"Máy đo điện trở nước","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"J0029529","unit":"Tổ SC&BD","date":"2026-03-26","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":308,"name":"Máy đo điện trở nước","category":"Máy đo điện trở nước","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"J0054490","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Không kiểm định được","extraNote":"","fileLink":""},{"id":309,"name":"Máy đo điện trở nước","category":"Máy đo điện trở nước","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"J0029544","unit":"Tổ SC&BD","date":"","report":"","stamp":"","note":"Không kiểm định được","extraNote":"","fileLink":""},{"id":310,"name":"Máy đo điện trở nước","category":"Máy đo điện trở nước","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"J0029517","unit":"Tổ SC&BD","date":"2025-12-27","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":311,"name":"Máy thử nghiệm ty leo trụ","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"E5801324","unit":"Tổ SC&BD","date":"2026-06-11","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":312,"name":"Máy thử nghiệm dây da an toàn","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"E30208","unit":"Tổ SC&BD","date":"2026-06-11","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":313,"name":"Máy đo phóng điện cục bộ cầm tay","category":"Thiết bị đo phóng điện cục bộ(PD)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"UPT1-4640","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Hư hỏng","extraNote":"","fileLink":""},{"id":314,"name":"Máy đo phóng điện cục bộ cầm tay","category":"Thiết bị đo phóng điện cục bộ(PD)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"UPT1-3648","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Hư hỏng","extraNote":"","fileLink":""},{"id":315,"name":"Máy đo phóng điện cục bộ cầm tay","category":"Thiết bị đo phóng điện cục bộ(PD)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"UTP2- 0010119","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Không kiểm định được","extraNote":"","fileLink":""},{"id":316,"name":"Máy đo phóng điện cục bộ cầm tay","category":"Thiết bị đo phóng điện cục bộ(PD)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"UTP2- 0010296","unit":"Tổ QLLĐ","date":"","report":"","stamp":"","note":"Không kiểm định được","extraNote":"","fileLink":""},{"id":317,"name":"Máy chụp ảnh sóng âm (máy đo PD)","category":"Thiết bị đo phóng điện cục bộ(PD)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"No:53569516","unit":"Tổ QLLĐ","date":"2026-05-13","report":"KT3-00591ADE5","stamp":"KT3-00591ADE5","note":"Bình thường","extraNote":"","fileLink":""},{"id":318,"name":"Máy đo phóng điện cục bộ cầm tay","category":"Thiết bị đo phóng điện cục bộ(PD)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"D1817","unit":"Tổ QLLĐ","date":"2026-07-26","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":319,"name":"Máy đo phóng điện cục bộ cầm tay","category":"Thiết bị đo phóng điện cục bộ(PD)","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"D1770","unit":"Tổ QLLĐ","date":"2027-01-06","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":320,"name":"Máy đo thứ tự pha hạ thế","category":"Máy đo thứ tự pha hạ thế","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"E0199553","unit":"Tổ SC&BD","date":"2026-08-13","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":321,"name":"Máy đo thứ tự pha hạ thế","category":"Máy đo thứ tự pha hạ thế","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"E0192312","unit":"Tổ SC&BD","date":"2026-08-13","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":322,"name":"Puly 3 tầng","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"PL2T-500","unit":"Tổ SC&BD","date":"2026-11-21","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":323,"name":"kích căng dây","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"KCD-001","unit":"Tổ SC&BD","date":"2026-10-10","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":324,"name":"kích căng dây","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"KCD-002","unit":"Tổ SC&BD","date":"2026-10-10","report":"","stamp":"","note":"Bình thường","extraNote":"","fileLink":""},{"id":325,"name":"MBT lưu động","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"MBT-001","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601149/BBKD-ETC-TB","stamp":"25K09966","note":"Bình thường","extraNote":"MBA lưu động 1 (400kVA)","fileLink":""},{"id":326,"name":"Chống sét van 18kV (Polymer)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"CS-28996","unit":"Tổ QLLĐ","date":"2026-06-09","report":"602982/BBKD-ETC-TB","stamp":"25K11905","note":"Bình thường","extraNote":"Xe MBA lưu động 3","fileLink":""},{"id":327,"name":"Chống sét van 18kV (Polymer)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"CS-28997","unit":"Tổ QLLĐ","date":"2026-06-09","report":"602982/BBKD-ETC-TB","stamp":"25K11906","note":"Bình thường","extraNote":"Xe MBA lưu động 3","fileLink":""},{"id":328,"name":"Chống sét van 18kV (Polymer)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"CS-28998","unit":"Tổ QLLĐ","date":"2026-06-09","report":"602982/BBKD-ETC-TB","stamp":"25K11907","note":"Bình thường","extraNote":"Xe MBA lưu động 3","fileLink":""},{"id":329,"name":"Dao cách ly 24kV (IDS-24-61)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"IDS-24-61","unit":"Tổ QLLĐ","date":"2026-06-09","report":"602996/BBKD-ETC-TB","stamp":"25K11904","note":"Bình thường","extraNote":"Xe MBA lưu động 3","fileLink":""},{"id":330,"name":"Tuyến cáp ngầm 24kV (Trụ - DS)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"Cáp-01","unit":"Tổ QLLĐ","date":"2026-06-10","report":"604787/BBKD-ETC-CT","stamp":"25K14586","note":"Bình thường","extraNote":"Đoạn DS - CS (MBA 3)","fileLink":""},{"id":331,"name":"Tuyến cáp ngầm 24kV (DS - MBT)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"Cáp-02","unit":"Tổ QLLĐ","date":"2026-06-10","report":"604786/BBKD-ETC-CT","stamp":"25K14585","note":"Bình thường","extraNote":"Đoạn DS - MBA (MBA 3)","fileLink":""},{"id":332,"name":"Máy cắt hạ thế 3 pha (NF630-SEW)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"NF630-SEW","unit":"Tổ QLLĐ","date":"2026-06-09","report":"602997/BBTN-ETC-TB","stamp":"25T23834","note":"Bình thường","extraNote":"Máy cắt hạ thế - Xe MBA 3","fileLink":""},{"id":333,"name":"Tuyến cáp ngầm 24kV (DS - MBT)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"Cáp-03","unit":"Tổ QLLĐ","date":"2026-11-15","report":"611870/BBKD-ETC-CT","stamp":"25K25584","note":"Bình thường","extraNote":"Xe MBA lưu động 1","fileLink":""},{"id":334,"name":"Tuyến cáp ngầm 24kV (LA - DS)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"Cáp-04","unit":"Tổ QLLĐ","date":"2026-11-15","report":"611871/BBKD-ETC-CT","stamp":"25K25583","note":"Bình thường","extraNote":"Xe MBA lưu động 1","fileLink":""},{"id":335,"name":"Dao cách ly 24kV (TUẤN ÂN)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"IDS-24-62","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601148/BBKD-ETC-TB","stamp":"25K09972","note":"Bình thường","extraNote":"Xe MBA lưu động 2","fileLink":""},{"id":336,"name":"Dao cách ly 24kV (ALSTOM)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"ALSTOM-01","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601146/BBKD-ETC-TB","stamp":"25K09967","note":"Bình thường","extraNote":"Xe MBA lưu động 1","fileLink":""},{"id":337,"name":"Chống sét van 18kV (Polymer)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"CS-20300","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601136/BBKD-ETC-TB","stamp":"25K09968","note":"Bình thường","extraNote":"Xe MBA lưu động 1","fileLink":""},{"id":338,"name":"Chống sét van 18kV (Polymer)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"CS-20301","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601136/BBKD-ETC-TB","stamp":"25K09969","note":"Bình thường","extraNote":"Xe MBA lưu động 1","fileLink":""},{"id":339,"name":"Chống sét van 18kV (Polymer)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"CS-20302","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601136/BBKD-ETC-TB","stamp":"25K09970","note":"Bình thường","extraNote":"Xe MBA lưu động 1","fileLink":""},{"id":340,"name":"Chống sét van 18kV (Polymer)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"CS-20303","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601137/BBKD-ETC-TB","stamp":"25K09973","note":"Bình thường","extraNote":"Xe MBA lưu động 2","fileLink":""},{"id":341,"name":"Chống sét van 18kV (Polymer)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"CS-20304","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601137/BBKD-ETC-TB","stamp":"25K09974","note":"Bình thường","extraNote":"Xe MBA lưu động 2","fileLink":""},{"id":342,"name":"Chống sét van 18kV (Polymer)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"CS-20305","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601137/BBKD-ETC-TB","stamp":"25K09975","note":"Bình thường","extraNote":"Xe MBA lưu động 2","fileLink":""},{"id":343,"name":"Tuyến cáp ngầm 24kV (LA - DS)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"Cáp-05","unit":"Tổ QLLĐ","date":"2026-11-15","report":"611855/BBKD-ETC-CT","stamp":"25K25586","note":"Bình thường","extraNote":"Xe MBA lưu động 2","fileLink":""},{"id":344,"name":"Tuyến cáp ngầm 24kV (DS - MBT)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"Cáp-06","unit":"Tổ QLLĐ","date":"2026-11-15","report":"611869/BBKD-ETC-CT","stamp":"25K25585","note":"Bình thường","extraNote":"Xe MBA lưu động 2","fileLink":""},{"id":345,"name":"Máy cắt hạ thế 3 pha (NF630-SEW)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"NF630-SEW-02","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601145/BBTN-ETC-TB","stamp":"25T12457","note":"Bình thường","extraNote":"Máy cắt hạ thế 3 pha - Xe MBA 2","fileLink":""},{"id":346,"name":"Máy cắt hạ thế 3 pha (F71)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"F71-01","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601143/BBTN-ETC-TB","stamp":"25T12456","note":"Bình thường","extraNote":"Máy cắt hạ thế 3 pha - Xe MBA 1","fileLink":""},{"id":347,"name":"Máy biến thế 3 pha (Lưu động 2)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"MBT-002","unit":"Tổ QLLĐ","date":"2026-04-17","report":"601154/BBKD-ETC-TB","stamp":"25K09971","note":"Bình thường","extraNote":"MBA lưu động 2 (400kVA)","fileLink":""},{"id":348,"name":"Máy biến thế 3 pha (Lưu động 3)","category":"Thiết bị Chuyên Dụng Khác","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"MBT-003","unit":"Tổ QLLĐ","date":"2026-06-09","report":"602959/BBKD-ETC-TB","stamp":"25K11903","note":"Bình thường","extraNote":"Xe MBA lưu động 3","fileLink":""},{"id":349,"name":"Máy đo điện trở suất (HANNA)","category":"Máy đo điện trở đất","mainCategory":"Thiết bị Đo và Thiết bị nâng","code":"HANNA","unit":"Tổ QLLĐ","date":"2026-03-20","report":"KT3-00556AHL5","stamp":"KT3-00556AHL5","note":"Bình thường","extraNote":"","fileLink":""}];
+
+        function loadDataFromFirebase() {
+            db.collection("equipments").onSnapshot(snapshot => {
+                if (!snapshot.empty) {
+                    equipmentList = [];
+                    snapshot.forEach(doc => { let data = doc.data(); data.docId = doc.id; equipmentList.push(data); });
+                    document.getElementById('syncNotice').style.display = 'none';
+                    equipmentList.sort((a, b) => (a.id || 0) - (b.id || 0));
+                    renderSidebar(); updateView(); populateDatalist();
+                } else {
+                    equipmentList = [...V28_DATA];
+                    renderSidebar(); updateView(); populateDatalist();
+                    if (userRole === 'ADMIN') {
+                        document.getElementById('syncNotice').style.display = 'block';
+                        document.getElementById('syncNotice').innerText = "Đang đồng bộ dữ liệu lên đám mây. Vui lòng không thoát trang.";
+                        
+                        let batch = db.batch();
+                        V28_DATA.forEach(item => {
+                            let newDocRef = db.collection("equipments").doc();
+                            batch.set(newDocRef, {
+                                id: item.id, name: item.name, category: item.category, mainCategory: item.mainCategory,
+                                code: item.code, unit: item.unit, date: item.date, report: item.report,
+                                stamp: item.stamp, note: item.note, extraNote: item.extraNote, fileLink: item.fileLink || ""
+                            });
+                        });
+                        batch.commit().then(() => {
+                            document.getElementById('syncNotice').style.backgroundColor = "#2ecc71";
+                            document.getElementById('syncNotice').innerText = "Đồng bộ thành công.";
+                            setTimeout(() => { document.getElementById('syncNotice').style.display = 'none'; }, 3000);
+                        }).catch(err => {
+                            document.getElementById('syncNotice').style.backgroundColor = "#e74c3c";
+                            document.getElementById('syncNotice').innerText = "Lỗi đồng bộ: " + err.message;
+                        });
+                    }
+                }
+            });
+        }
+
+        // Lọc thiết bị sắp hết hạn
+        function getWarningData() {
+            return equipmentList.filter(item => {
+                const isDamaged = (item.note === 'Hư hỏng' || item.note === 'Hư hỏng vật lý' || item.note === 'Thử nghiệm không đạt' || item.note === 'Không kiểm định được' || item.note === 'Kiểm định/ hiệu chuẩn không đạt');
+                if (isDamaged) return false;
+                if (!item.date) return false;
+                const itemDate = new Date(item.date + "T00:00:00");
+                const diffDays = Math.ceil((itemDate - today) / (1000 * 60 * 60 * 24));
+                return diffDays <= 15;
+            });
+        }
+
+        function downloadWarningReport() {
+            const warnings = getWarningData();
+            if (warnings.length === 0) {
+                alert("Hệ thống ghi nhận không có thiết bị nào sắp hết hạn cần báo cáo.");
+                return;
+            }
+            
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFFNhánh Quản lý,Nhóm Danh mục,Tên thiết bị,Mã số,Đơn vị quản lý,Hạn thử nghiệm,Số biên bản,Số tem,Ghi chú,Link đính kèm\n";
+            
+            warnings.forEach(item => {
+                const cat = getCategoryLogic(item.name);
+                const mainCat = getMainCategoryLogic(cat);
+                const displayDate = item.date ? item.date.split('-').reverse().join('/') : 'N/A';
+                csvContent += `"${mainCat}","${cat}","${item.name}","${item.code}","${item.unit}","${displayDate}","${item.report || ''}","${item.stamp || ''}","${item.note}","${item.fileLink || ''}"\n`;
+            });
+            
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", "Bao_cao_thiet_bi_sap_het_han.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            alert("Tải file thành công. Bạn có thể đính kèm file này để báo cáo.");
+        }
+
+        function copyWarningText() {
+            const warnings = getWarningData();
+            if (warnings.length === 0) {
+                alert("Không có thiết bị sắp hết hạn.");
+                return;
+            }
+            let text = "🚨 CẢNH BÁO THIẾT BỊ AN TOÀN SẮP ĐẾN HẠN 🚨\n";
+            text += `Hệ thống ghi nhận có ${warnings.length} thiết bị/trang cụ sắp đến hạn hoặc đã quá hạn kiểm định (Đã lọc bỏ các thiết bị hư hỏng).\n`;
+            text += "Chi tiết vui lòng xem file danh sách đính kèm.\n";
+            
+            navigator.clipboard.writeText(text).then(() => {
+                alert("Đã chép nội dung thông báo. Bạn có thể dán vào nội dung email hoặc phần mềm chat.");
+            }).catch(err => alert("Lỗi sao chép: " + err));
+        }
+
+        function startScanner() {
+            setFilter('All'); 
+            document.getElementById('scannerModal').style.display = 'flex';
+            html5QrcodeScanner = new Html5Qrcode("reader");
+            html5QrcodeScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, 
+                (decodedText) => {
+                    document.getElementById('searchInput').value = decodedText;
+                    stopScanner(); searchTable(); alert("Tìm thấy mã: " + decodedText);
+                }, (err) => {}
+            ).catch(err => { alert("Lỗi Camera: " + err); stopScanner(); });
+        }
+
+        function stopScanner() { document.getElementById('scannerModal').style.display = 'none'; if (html5QrcodeScanner) html5QrcodeScanner.stop().catch(e => console.error(e)); }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            if (window.innerWidth > 768) { sidebar.classList.toggle('collapsed'); } 
+            else { sidebar.classList.toggle('open'); document.getElementById('mobileOverlay').style.display = sidebar.classList.contains('open') ? 'block' : 'none'; }
+        }
+
+        function closeMobileMenu() {
+            if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('mobileOverlay').style.display = 'none'; }
+        }
+        
+        function getCategoryLogic(name) {
+            const n = name.toLowerCase().trim();
+            if (n.includes("ampe kìm")) return "Thiết bị đo Ampe kìm";
+            if (n.includes("camera nhiệt") || n.includes("nhiệt kế") || n.includes("máy chụp ảnh nhiệt")) return "Thiết bị đo nhiệt độ";
+            if (n.includes("sóng âm") || n.includes("phóng điện cục bộ") || n.includes("máy đo pd")) return "Thiết bị đo phóng điện cục bộ(PD)";
+            if (n.includes("sào đo dòng điện")) return "Sào đo dòng điện (phần tín hiệu)";
+            if (n.includes("găng cách điện trung thế")) return "Găng cách điện trung thế";
+            if (n.includes("găng tay cách điện hạ thế")) return "Găng tay cách điện hạ thế";
+            if (n.includes("ủng cách điện")) return "Ủng cách điện trung thế";
+            if (n.includes("ghế cách điện")) return "Ghế cách điện trung thế";
+            if (n.includes("đầu thử điện")) return "Đầu thử điện trung thế";
+            if (n.includes("bọc sứ đứng")) return "Bọc sứ đứng/đỡ nhựa cứng";
+            if (n.includes("bọc sứ néo")) return "Bọc sứ néo nhựa cứng";
+            if (n.includes("bọc dây dẫn")) return "Bọc dây dẫn nhựa cứng";
+            if (n.includes("sào")) return "Sào Thao Tác - Tiếp Địa Các loại";
+            const chuyenDung = ["puly 3 tầng", "máy thử nghiệm", "kích căng dây", "mbt lưu động", "chống sét", "dao cách ly", "cáp ngầm", "máy cắt", "máy biến thế"];
+            if (chuyenDung.some(keyword => n.includes(keyword))) return "Thiết bị Chuyên Dụng Khác";
+            if (n === "máy đo điện trở dất" || n.includes("hanna")) return "Máy đo điện trở đất";
+            if (n === "máy đo coss φ/ sn: 0102ade7/2") return "Máy đo coss φ";
+            if (n === "gigaohm mét 250v (kyroritsu)") return "Gigaomh mét 250v (Kyroritsu)";
+            return name;
+        }
+
+        function getMainCategoryLogic(category) {
+            const trangCuAnToan = ["Găng cách điện trung thế", "Găng tay cách điện hạ thế", "Ủng cách điện trung thế", "Ghế cách điện trung thế", "Bọc sứ đứng/đỡ nhựa cứng", "Bọc sứ néo nhựa cứng", "Bọc dây dẫn nhựa cứng", "Sào Thao Tác - Tiếp Địa Các loại", "Đầu thử điện trung thế"];
+            return trangCuAnToan.includes(category) ? "Trang Cụ An Toàn" : "Thiết bị Đo và Thiết bị nâng";
+        }
+
+        function toggleSubmenu(id) {
+            const el = document.getElementById(id); const icon = document.getElementById(id.replace('main-', 'icon-'));
+            if (el.style.display === 'none') { el.style.display = 'block'; icon.innerText = '▼'; } else { el.style.display = 'none'; icon.innerText = '▶'; }
+        }
+
+        function renderSidebar() {
+            const catTrangCu = [...new Set(equipmentList.filter(i => getMainCategoryLogic(getCategoryLogic(i.name)) === "Trang Cụ An Toàn").map(i => getCategoryLogic(i.name)))].sort();
+            const catThietBi = [...new Set(equipmentList.filter(i => getMainCategoryLogic(getCategoryLogic(i.name)) === "Thiết bị Đo và Thiết bị nâng").map(i => getCategoryLogic(i.name)))].sort();
+            const domTrangCu = document.getElementById('main-Trang-Cu-An-Toan');
+            const domThietBi = document.getElementById('main-Thiet-Bi-Do-Nang');
+            domTrangCu.innerHTML = ''; domThietBi.innerHTML = '';
+            catTrangCu.forEach(cat => {
+                const div = document.createElement('div'); div.className = `menu-item ${currentFilter === cat ? 'active' : ''}`;
+                div.innerHTML = `<span class="bullet">▪</span> ${cat}`; div.onclick = () => { setFilter(cat); closeMobileMenu(); };
+                domTrangCu.appendChild(div);
+            });
+            catThietBi.forEach(cat => {
+                const div = document.createElement('div'); div.className = `menu-item ${currentFilter === cat ? 'active' : ''}`;
+                div.innerHTML = `<span class="bullet">▪</span> ${cat}`; div.onclick = () => { setFilter(cat); closeMobileMenu(); };
+                domThietBi.appendChild(div);
+            });
+        }
+
+        function setFilter(filterName) {
+            currentFilter = filterName;
+            document.getElementById('menuDashboard').classList.toggle('active', filterName === 'Dashboard');
+            document.getElementById('menuAll').classList.toggle('active', filterName === 'All');
+            document.getElementById('menuDamaged').classList.toggle('active', filterName === 'Damaged');
+            closeMobileMenu(); renderSidebar(); updateView();
+        }
+
+        function isItemDanger(item) {
+            if (item.note === 'Hư hỏng' || item.note === 'Thử nghiệm không đạt' || item.note === 'Không kiểm định được' || item.note === 'Kiểm định/ hiệu chuẩn không đạt') return true;
+            if (item.date) { const itemDate = new Date(item.date + "T00:00:00"); if (itemDate < today) return true; }
+            return false;
+        }
+
+        function getFilteredData() {
+            if (currentFilter === 'Dashboard' || currentFilter === 'All') return equipmentList;
+            if (currentFilter === 'Damaged') return equipmentList.filter(item => isItemDanger(item));
+            return equipmentList.filter(item => getCategoryLogic(item.name) === currentFilter);
+        }
+
+        function toRoman(num) { const roman = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]; return roman[num - 1] || num; }
+
+        function updateView() {
+            const targetData = getFilteredData();
+            if (currentFilter === 'Dashboard') {
+                document.getElementById('viewTitle').innerText = 'Trang Chủ';
+                document.getElementById('dashboardCharts').style.display = 'grid';
+                document.getElementById('reminderPanel').style.display = userRole === 'ADMIN' ? 'block' : 'none';
+                document.getElementById('tableView').style.display = 'none';
+            } else {
+                document.getElementById('viewTitle').innerText = currentFilter === 'All' ? 'Tất cả thiết bị' : (currentFilter === 'Damaged' ? 'Thiết bị hư hỏng / quá hạn' : currentFilter);
+                document.getElementById('dashboardCharts').style.display = 'none';
+                document.getElementById('reminderPanel').style.display = 'none';
+                document.getElementById('tableView').style.display = 'flex';
+                renderTable(targetData);
+            }
+            calculateStats(equipmentList);
+        }
+
+        function calculateStats(dataList) {
+            let countG = 0, countW = 0, countD = 0; const unitData = {};
+            dataList.forEach(item => {
+                unitData[item.unit] = (unitData[item.unit] || 0) + 1;
+                if (item.note === 'Hư hỏng' || item.note === 'Thử nghiệm không đạt' || item.note === 'Không kiểm định được' || item.note === 'Kiểm định/ hiệu chuẩn không đạt') { countD++; } 
+                else if (!item.date) { countW++; } 
+                else {
+                    const diffDays = Math.ceil((new Date(item.date + "T00:00:00") - today) / (1000 * 60 * 60 * 24));
+                    if (diffDays < 0) countD++; else if (diffDays <= 15) countW++; else countG++;
+                }
+            });
+            document.getElementById('countTotal').innerText = dataList.length; document.getElementById('countGood').innerText = countG;
+            document.getElementById('countWarning').innerText = countW; document.getElementById('countDanger').innerText = countD;
+            if (currentFilter === 'Dashboard') drawCharts(countG, countW, countD, unitData);
+        }
+
+        function drawCharts(g, w, d, unitData) {
+            const ctxStatus = document.getElementById('statusChart').getContext('2d');
+            if (statusChartInst) statusChartInst.destroy();
+            statusChartInst = new Chart(ctxStatus, { type: 'doughnut', data: { labels: ['Đạt chuẩn', 'Chưa hạn/Sắp đến hạn', 'Quá hạn/Lỗi KĐ'], datasets: [{ data: [g, w, d], backgroundColor: ['#2ecc71', '#f1c40f', '#e74c3c'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+            const ctxUnit = document.getElementById('unitChart').getContext('2d');
+            if (unitChartInst) unitChartInst.destroy();
+            unitChartInst = new Chart(ctxUnit, { type: 'bar', data: { labels: Object.keys(unitData), datasets: [{ label: 'Số lượng thiết bị', data: Object.values(unitData), backgroundColor: '#005288' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+        }
+
+        function renderTable(dataList) {
+            const tbody = document.getElementById('dataTable'); tbody.innerHTML = '';
+            const mainCats = ["Trang Cụ An Toàn", "Thiết bị Đo và Thiết bị nâng"]; let romanIndex = 1;
+            mainCats.forEach(mainCat => {
+                const itemsInMain = dataList.filter(i => getMainCategoryLogic(getCategoryLogic(i.name)) === mainCat);
+                if (itemsInMain.length === 0) return;
+                const trMain = document.createElement('tr'); trMain.className = 'group-header-main';
+                const colSpan = userRole === 'VIEWER' ? 9 : 10; 
+                trMain.innerHTML = `<td colspan="${colSpan}">${mainCat.toUpperCase()}</td>`; tbody.appendChild(trMain);
+                const cats = [...new Set(itemsInMain.map(i => getCategoryLogic(i.name)))].sort();
+                cats.forEach(cat => {
+                    const trCat = document.createElement('tr'); trCat.className = 'group-header-sub';
+                    trCat.innerHTML = `<td colspan="${colSpan}"><strong>${toRoman(romanIndex)}. ${cat}</strong></td>`; tbody.appendChild(trCat); romanIndex++;
+                    itemsInMain.filter(i => getCategoryLogic(i.name) === cat).forEach(item => appendRow(item, tbody));
+                });
+            });
+        }
+
+        function appendRow(item, tbody) {
+            let statusClass = '', statusText = '';
+            if (item.note === 'Hư hỏng' || item.note === 'Thử nghiệm không đạt' || item.note === 'Không kiểm định được' || item.note === 'Kiểm định/ hiệu chuẩn không đạt') { statusClass = 'bg-red'; statusText = item.note === 'Hư hỏng' ? 'Hư hỏng' : 'Lỗi KĐ'; } 
+            else if (!item.date) { statusClass = 'bg-yellow'; statusText = 'Chưa có hạn'; } 
+            else {
+                const diffDays = Math.ceil((new Date(item.date + "T00:00:00") - today) / (1000 * 60 * 60 * 24));
+                if (diffDays < 0) { statusClass = 'bg-red'; statusText = 'Quá hạn'; } else if (diffDays <= 15) { statusClass = 'bg-yellow'; statusText = 'Sắp đến hạn'; } else { statusClass = 'bg-green'; statusText = 'Đạt chuẩn'; }
+            }
+            const displayDate = item.date ? item.date.split('-').reverse().join('/') : 'N/A';
+            let reportCell = item.report || '';
+            if (item.report && item.fileLink) { reportCell = `<a href="${item.fileLink}" target="_blank" class="file-link">📄 ${item.report}</a>`; } 
+            else if (item.fileLink && !item.report) { reportCell = `<a href="${item.fileLink}" target="_blank" class="file-link">📄 Xem file</a>`; }
+
+            let noteContent = item.note !== 'Bình thường' ? item.note : '';
+            if (item.extraNote) { noteContent += noteContent ? `<br><span style="color:#7f8c8d; font-size:11px;">${item.extraNote}</span>` : `<span style="color:#7f8c8d; font-size:11px;">${item.extraNote}</span>`; }
+
+            let actionButtons = '';
+            if (userRole === 'ADMIN') {
+                actionButtons = `<button class="btn btn-edit" onclick="editItem('${item.docId || item.id}')">Sửa</button><button class="btn btn-danger" onclick="deleteItem('${item.docId || item.id}')">Xóa</button>`;
+            } else if (userRole === 'MANAGER') {
+                actionButtons = `<button class="btn btn-edit" onclick="editItem('${item.docId || item.id}')">Cập nhật</button>`;
+            }
+            const tdAction = userRole !== 'VIEWER' ? `<td class="manager-up">${actionButtons}</td>` : '';
+
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(item.code)}`;
+            const qrCell = `<img src="${qrUrl}" alt="QR" style="width: 45px; height: 45px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px;" onclick="window.open('${qrUrl}', '_blank')" title="Mở hình ảnh QR">`;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td style="text-align: center;">${qrCell}</td><td>${item.name}</td><td><strong>${item.code}</strong></td><td>${item.unit}</td><td>${displayDate}</td><td>${reportCell}</td><td>${item.stamp || ''}</td><td>${noteContent}</td><td><span class="status ${statusClass}">${statusText}</span></td>${tdAction}`;
+            tbody.appendChild(tr);
+        }
+
+        function searchTable() {
+            const input = document.getElementById('searchInput').value.toLowerCase();
+            const trs = document.getElementById('dataTable').getElementsByTagName('tr');
+            for (let i = 0; i < trs.length; i++) {
+                if (trs[i].classList.contains('group-header-main') || trs[i].classList.contains('group-header-sub')) continue;
+                trs[i].style.display = (trs[i].textContent || trs[i].innerText).toLowerCase().indexOf(input) > -1 ? '' : 'none';
+            }
+        }
+
+        function exportToCSV(exportAll) {
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFFNhánh Quản lý,Nhóm Danh mục,Tên thiết bị,Mã số,Đơn vị quản lý,Hạn thử nghiệm,Số biên bản,Số tem,Ghi chú,Ghi chú bổ sung,Link đính kèm\n";
+            (exportAll ? equipmentList : getFilteredData()).forEach(item => {
+                const cat = getCategoryLogic(item.name);
+                csvContent += `"${getMainCategoryLogic(cat)}","${cat}","${item.name}","${item.code}","${item.unit}","${item.date ? item.date.split('-').reverse().join('/') : 'N/A'}","${item.report || ''}","${item.stamp || ''}","${item.note}","${item.extraNote || ''}","${item.fileLink || ''}"\n`;
+            });
+            const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", exportAll ? "Bao_cao_Toan_bo.csv" : `Bao_cao_${currentFilter}.csv`);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        function openModal() {
+            if(userRole === 'VIEWER') return alert("Không có quyền thực hiện tính năng này.");
+            document.getElementById('formModal').style.display = 'block'; document.getElementById('modalTitle').innerText = 'Thêm thiết bị mới';
+            ['itemId', 'firebaseDocId', 'itemName', 'itemCode', 'itemDate', 'itemReport', 'itemStamp', 'itemFileLink', 'itemExtraNote', 'itemFileInput', 'itemFileUrl'].forEach(id => document.getElementById(id).value = '');
+            
+            document.getElementById('itemName').disabled = false;
+            document.getElementById('itemCode').readOnly = false; 
+
+            document.getElementById('itemUnit').value = 'Tổ QLLĐ'; document.getElementById('itemNote').value = 'Bình thường';
+            document.getElementById('uploadProgress').innerText = ''; document.getElementById('currentFile').innerHTML = '';
+        }
+
+        function closeModal() { document.getElementById('formModal').style.display = 'none'; document.getElementById('btnSaveData').innerText = "Lưu thông tin"; document.getElementById('btnSaveData').disabled = false; }
+
+        async function saveData() {
+            if(userRole === 'VIEWER') return;
+            const docId = document.getElementById('firebaseDocId').value, name = document.getElementById('itemName').value, code = document.getElementById('itemCode').value;
+            if (!name || !code) return alert('Hệ thống yêu cầu nhập đầy đủ Tên thiết bị và Mã số.');
+            const btnSave = document.getElementById('btnSaveData'); btnSave.innerText = "Hệ thống đang xử lý..."; btnSave.disabled = true;
+
+            const fileInput = document.getElementById('itemFileInput');
+            let finalFileUrl = document.getElementById('itemFileUrl').value;
+
+            try {
+                if (fileInput.files.length > 0) {
+                    const file = fileInput.files[0]; const storageRef = storage.ref('bien_ban/' + Date.now() + '_' + file.name);
+                    document.getElementById('uploadProgress').style.color = "#e74c3c"; document.getElementById('uploadProgress').innerText = "Đang tải dữ liệu tệp tin...";
+                    const snapshot = await storageRef.put(file);
+                    finalFileUrl = await snapshot.ref.getDownloadURL();
+                    document.getElementById('uploadProgress').style.color = "#2ecc71"; document.getElementById('uploadProgress').innerText = "Tệp tin đã tải thành công.";
+                }
+
+                const cat = getCategoryLogic(name);
+                const mainCat = getMainCategoryLogic(cat);
+
+                const payload = { name: name, category: cat, mainCategory: mainCat, code: code, unit: document.getElementById('itemUnit').value, date: document.getElementById('itemDate').value, report: document.getElementById('itemReport').value, stamp: document.getElementById('itemStamp').value, note: document.getElementById('itemNote').value, extraNote: document.getElementById('itemExtraNote').value, fileLink: finalFileUrl };
+                
+                if (docId) {
+                    await db.collection("equipments").doc(docId).update(payload);
+                    logAction("CẬP NHẬT", name, code);
+                } else {
+                    payload.id = Date.now();
+                    await db.collection("equipments").add(payload);
+                    logAction("THÊM MỚI", name, code);
+                }
+                closeModal(); 
+            } catch (err) { alert("Quá trình lưu dữ liệu phát sinh lỗi: " + err.message); btnSave.innerText = "Lưu thông tin"; btnSave.disabled = false; }
+        }
+
+        function editItem(docIdOrId) {
+            if(userRole === 'VIEWER') return alert("Không có quyền thực hiện thao tác này.");
+            const item = equipmentList.find(e => e.docId === docIdOrId || e.id == docIdOrId);
+            if (item) {
+                document.getElementById('firebaseDocId').value = item.docId || ''; document.getElementById('itemId').value = item.id || '';
+                document.getElementById('itemName').value = item.name; document.getElementById('itemCode').value = item.code; 
+                
+                if (userRole === 'MANAGER') {
+                    document.getElementById('itemName').disabled = true;
+                    document.getElementById('itemCode').readOnly = true;
+                } else {
+                    document.getElementById('itemName').disabled = false;
+                    document.getElementById('itemCode').readOnly = false;
+                }
+
+                document.getElementById('itemUnit').value = item.unit; document.getElementById('itemDate').value = item.date; document.getElementById('itemReport').value = item.report || ''; document.getElementById('itemStamp').value = item.stamp || ''; document.getElementById('itemExtraNote').value = item.extraNote || ''; document.getElementById('itemNote').value = item.note;
+                document.getElementById('itemFileInput').value = ''; document.getElementById('itemFileUrl').value = item.fileLink || ''; document.getElementById('uploadProgress').innerText = '';
+                document.getElementById('currentFile').innerHTML = item.fileLink ? `Tệp đính kèm hiện tại: <a href="${item.fileLink}" target="_blank">Xem biên bản</a>` : 'Không có biên bản đính kèm.';
+                document.getElementById('modalTitle').innerText = 'Cập nhật trạng thái'; document.getElementById('formModal').style.display = 'block';
+            }
+        }
+
+        function deleteItem(docIdOrId) {
+            if(userRole !== 'ADMIN') return alert("Thao tác yêu cầu quyền quản trị.");
+            const item = equipmentList.find(e => e.docId === docIdOrId || e.id == docIdOrId);
+            if (confirm('Xác nhận xóa hồ sơ thiết bị này ra khỏi cơ sở dữ liệu?')) {
+                db.collection("equipments").doc(docIdOrId).delete()
+                .then(() => { if(item) logAction("XÓA", item.name, item.code); })
+                .catch(e => alert("Xảy ra lỗi trong quá trình xử lý: " + e)); 
+            }
+        }
+    </script>
+</body>
+</html>
