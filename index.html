@@ -408,7 +408,8 @@
         let equipmentList = [];
         let currentFilter = 'Dashboard';
         let statusChartInst = null, unitChartInst = null;
-        const today = new Date("2026-03-13T00:00:00");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         let html5QrcodeScanner = null;
 
         // DỮ LIỆU GỐC
