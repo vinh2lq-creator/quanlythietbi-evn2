@@ -873,7 +873,7 @@
 
         function closeModal() { document.getElementById('formModal').style.display = 'none'; document.getElementById('btnSaveData').innerText = "Lưu thông tin"; document.getElementById('btnSaveData').disabled = false; }
 
-        // Đã sửa hàm saveData
+        // Hàm lưu dữ liệu (Đã tích hợp cơ chế Chống treo mạng & Vượt tường lửa)
         async function saveData() {
             if(userRole === 'VIEWER') return;
             const docId = document.getElementById('firebaseDocId').value;
@@ -883,18 +883,21 @@
             if (!name || !code) return alert('Thông tin Tên thiết bị và Mã số là bắt buộc.');
             
             const btnSave = document.getElementById('btnSaveData'); 
-            btnSave.innerText = "Đang xử lý..."; 
+            btnSave.innerText = "Đang kết nối máy chủ..."; 
             btnSave.disabled = true;
 
             const fileInput = document.getElementById('itemFileInput');
             let finalFileUrl = document.getElementById('itemFileUrl').value;
 
             try {
+                // 1. Ép Firebase thức dậy và mở lại kết nối (Phá vỡ giới hạn tường lửa)
+                await db.enableNetwork();
+
                 if (fileInput.files.length > 0) {
                     const file = fileInput.files[0]; 
                     const storageRef = storage.ref('bien_ban/' + Date.now() + '_' + file.name);
                     document.getElementById('uploadProgress').style.color = "#e74c3c"; 
-                    document.getElementById('uploadProgress').innerText = "Đang tải tệp tin lên hệ thống...";
+                    document.getElementById('uploadProgress').innerText = "Đang tải tệp tin lên...";
                     const snapshot = await storageRef.put(file);
                     finalFileUrl = await snapshot.ref.getDownloadURL();
                     document.getElementById('uploadProgress').style.color = "#2ecc71"; 
@@ -915,20 +918,32 @@
                     fileLink: finalFileUrl 
                 };
                 
+                // 2. Tạo bộ đếm giờ 8 giây (Chống kẹt nút)
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error("Mạng nội bộ đang chặn đường truyền. Vui lòng F5 tải lại trang và thao tác nhanh hơn.")), 8000)
+                );
+
                 if (docId) {
-                    await db.collection("equipments").doc(docId).update(payload);
+                    // Chạy đua giữa lệnh Update và Timeout
+                    await Promise.race([
+                        db.collection("equipments").doc(docId).update(payload),
+                        timeoutPromise
+                    ]);
                     logAction("CẬP NHẬT", name, code);
                     alert("Cập nhật dữ liệu thành công!");
                 } else {
                     payload.id = Date.now();
-                    await db.collection("equipments").add(payload);
+                    await Promise.race([
+                        db.collection("equipments").add(payload),
+                        timeoutPromise
+                    ]);
                     logAction("THÊM MỚI", name, code);
                     alert("Thêm mới thiết bị thành công!");
                 }
                 closeModal(); 
             } catch (err) { 
                 console.error("Lỗi Firebase:", err);
-                alert("Lưu dữ liệu thất bại. Lỗi kết nối: " + err.message); 
+                alert("Lưu thất bại:\n" + err.message); 
                 btnSave.innerText = "Lưu thông tin"; 
                 btnSave.disabled = false; 
             }
