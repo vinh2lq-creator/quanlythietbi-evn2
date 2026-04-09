@@ -513,12 +513,20 @@
             }
         });
 
-        function logAction(actionType, itemName, itemCode) {
-            const email = currentUser ? currentUser.email : "Unknown";
-            db.collection("logs").add({
-                action: actionType, itemName: itemName, itemCode: itemCode, userEmail: email, timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            }).catch(e => console.error("Lỗi ghi nhận lịch sử: ", e));
-        }
+        async function logAction(actionType, itemName, itemCode) {
+    if (!currentUser) return;
+    try {
+        await db.collection("logs").add({
+            action: actionType,
+            itemName: itemName,
+            itemCode: itemCode,
+            userEmail: currentUser.email,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (e) {
+        console.error("Lỗi ghi log:", e);
+    }
+}
 
         function viewAuditLogs() {
             if(userRole !== 'ADMIN') return;
@@ -872,105 +880,125 @@ snapshot.forEach(doc => {
         function closeModal() { document.getElementById('formModal').style.display = 'none'; document.getElementById('btnSaveData').innerText = "Lưu thông tin"; document.getElementById('btnSaveData').disabled = false; }
 
        async function saveData() {
-            if(userRole === 'VIEWER') return;
-            const docId = document.getElementById('firebaseDocId').value;
-            const name = document.getElementById('itemName').value;
-            const code = document.getElementById('itemCode').value;
-            
-            if (!name || !code) return alert('Thông tin Tên thiết bị và Mã số là bắt buộc.');
-            
-            const btnSave = document.getElementById('btnSaveData'); 
-            btnSave.innerText = "Đang xử lý..."; 
-            btnSave.disabled = true;
+    if (userRole === 'VIEWER') return;
 
-            const fileInput = document.getElementById('itemFileInput');
-            let finalFileUrl = document.getElementById('itemFileUrl').value;
+    const docId = document.getElementById('firebaseDocId').value.trim();
+    const name = document.getElementById('itemName').value.trim();
+    const code = document.getElementById('itemCode').value.trim();
 
-            try {
-                if (fileInput.files.length > 0) {
-                    const file = fileInput.files[0]; 
-                    const storageRef = storage.ref('bien_ban/' + Date.now() + '_' + file.name);
-                    document.getElementById('uploadProgress').style.color = "#e74c3c"; 
-                    document.getElementById('uploadProgress').innerText = "Đang tải tệp tin lên hệ thống...";
-                    const snapshot = await storageRef.put(file);
-                    finalFileUrl = await snapshot.ref.getDownloadURL();
-                    document.getElementById('uploadProgress').style.color = "#2ecc71"; 
-                    document.getElementById('uploadProgress').innerText = "Đã lưu tệp tin thành công.";
-                }
-
-                const cat = getCategoryLogic(name);
-                const mainCat = getMainCategoryLogic(cat);
-
-                const payload = { 
-                    name: name, category: cat, mainCategory: mainCat, code: code, 
-                    unit: document.getElementById('itemUnit').value, 
-                    date: document.getElementById('itemDate').value, 
-                    report: document.getElementById('itemReport').value, 
-                    stamp: document.getElementById('itemStamp').value, 
-                    note: document.getElementById('itemNote').value, 
-                    extraNote: document.getElementById('itemExtraNote').value, 
-                    fileLink: finalFileUrl 
-                };
-                
-                if (docId) {
-                    // Nếu có docId (nghĩa là đang SỬA)
-                    await db.collection("equipments").doc(docId).update(payload);
-                    logAction("CẬP NHẬT", name, code);
-                    alert("Cập nhật dữ liệu thành công!"); // Thêm thông báo
-                } else {
-                    // Nếu không có docId (nghĩa là THÊM MỚI)
-                    payload.id = Date.now();
-                    await db.collection("equipments").add(payload);
-                    logAction("THÊM MỚI", name, code);
-                    alert("Thêm mới thiết bị thành công!"); // Thêm thông báo
-                }
-                closeModal(); 
-            } catch (err) { 
-                console.error("Lỗi chi tiết từ Firebase:", err);
-                alert("Quá trình lưu dữ liệu thất bại. Firebase từ chối kết nối: " + err.message); 
-                btnSave.innerText = "Lưu thông tin"; 
-                btnSave.disabled = false; 
-            }
-        }
-
-        function editItem(targetDocId) {
-    if(userRole === 'VIEWER') return alert("Bạn không có quyền.");
-    
-    // Tìm thiết bị trong danh sách dựa vào mã docId gửi từ nút bấm
-    const item = equipmentList.find(e => e.docId === targetDocId);
-    
-    if (item) {
-        // Gán mã docId vào ô ẩn để dùng cho việc lưu
-        document.getElementById('firebaseDocId').value = item.docId; 
-        document.getElementById('itemId').value = item.id || '';
-        
-        document.getElementById('itemName').value = item.name; 
-        document.getElementById('itemCode').value = item.code; 
-        
-        if (userRole === 'MANAGER') {
-            document.getElementById('itemName').disabled = true;
-            document.getElementById('itemCode').readOnly = true;
-        } else {
-            document.getElementById('itemName').disabled = false;
-            document.getElementById('itemCode').readOnly = false;
-        }
-
-        document.getElementById('itemUnit').value = item.unit; 
-        document.getElementById('itemDate').value = item.date; 
-        document.getElementById('itemReport').value = item.report || ''; 
-        document.getElementById('itemStamp').value = item.stamp || ''; 
-        document.getElementById('itemExtraNote').value = item.extraNote || ''; 
-        document.getElementById('itemNote').value = item.note;
-        document.getElementById('itemFileInput').value = ''; 
-        document.getElementById('itemFileUrl').value = item.fileLink || ''; 
-        document.getElementById('uploadProgress').innerText = '';
-        document.getElementById('currentFile').innerHTML = item.fileLink ? `Tệp tin: <a href="${item.fileLink}" target="_blank">Xem biên bản</a>` : 'Chưa có tệp.';
-        
-        document.getElementById('modalTitle').innerText = 'Cập nhật trạng thái'; 
-        document.getElementById('formModal').style.display = 'block';
-    } else {
-        alert("Lỗi: Không tìm thấy ID của thiết bị này trên máy chủ Firebase!");
+    if (!name || !code) {
+        alert('Tên thiết bị và Mã số không được để trống!');
+        return;
     }
+
+    const btnSave = document.getElementById('btnSaveData');
+    btnSave.innerText = "Đang lưu...";
+    btnSave.disabled = true;
+
+    const fileInput = document.getElementById('itemFileInput');
+    let finalFileUrl = document.getElementById('itemFileUrl').value;
+
+    try {
+        // 1. Upload file nếu có
+        if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const storageRef = storage.ref('bien_ban/' + Date.now() + '_' + file.name);
+            document.getElementById('uploadProgress').innerText = "Đang tải file lên...";
+            const snapshot = await storageRef.put(file);
+            finalFileUrl = await snapshot.ref.getDownloadURL();
+            document.getElementById('uploadProgress').innerHTML = "✅ File đã tải lên thành công";
+        }
+
+        // 2. Tạo payload
+        const cat = getCategoryLogic(name);
+        const mainCat = getMainCategoryLogic(cat);
+
+        const payload = {
+            name: name,
+            category: cat,
+            mainCategory: mainCat,
+            code: code,
+            unit: document.getElementById('itemUnit').value,
+            date: document.getElementById('itemDate').value,
+            report: document.getElementById('itemReport').value,
+            stamp: document.getElementById('itemStamp').value,
+            note: document.getElementById('itemNote').value,
+            extraNote: document.getElementById('itemExtraNote').value,
+            fileLink: finalFileUrl
+        };
+
+        // 3. LƯU DỮ LIỆU - DÙNG set + merge (đã khắc phục lỗi update không lưu)
+        const docRef = db.collection("equipments").doc(docId);
+
+        if (docId) {
+            // === CẬP NHẬT ===
+            await docRef.set(payload, { merge: true });
+            await logAction("CẬP NHẬT", name, code);
+            alert("✅ Cập nhật thành công!");
+        } else {
+            // === THÊM MỚI ===
+            payload.id = Date.now();
+            await db.collection("equipments").add(payload);
+            await logAction("THÊM MỚI", name, code);
+            alert("✅ Thêm mới thiết bị thành công!");
+        }
+
+        // 4. Cập nhật ngay local (optimistic update) để UI refresh liền
+        const index = equipmentList.findIndex(item => item.docId === docId);
+        if (index !== -1) {
+            equipmentList[index] = { ...equipmentList[index], ...payload, docId: docId };
+        }
+
+        closeModal();
+        updateView();           // refresh dashboard + bảng
+        renderSidebar();        // refresh menu sidebar
+
+    } catch (err) {
+        console.error("Lỗi saveData:", err);
+        alert("❌ Lưu thất bại: " + err.message);
+    } finally {
+        btnSave.innerText = "Lưu thông tin";
+        btnSave.disabled = false;
+    }
+}
+        
+        function editItem(targetDocId) {
+    if (userRole === 'VIEWER') {
+        alert("Bạn không có quyền chỉnh sửa.");
+        return;
+    }
+
+    const item = equipmentList.find(e => e.docId === targetDocId);
+    if (!item) {
+        alert("Lỗi: Không tìm thấy thiết bị trên Firebase!");
+        return;
+    }
+
+    // Gán dữ liệu vào form
+    document.getElementById('firebaseDocId').value = item.docId;
+    document.getElementById('itemId').value = item.id || '';
+    
+    document.getElementById('itemName').value = item.name;
+    document.getElementById('itemCode').value = item.code;
+    document.getElementById('itemUnit').value = item.unit || 'Tổ QLLĐ';
+    document.getElementById('itemDate').value = item.date || '';
+    document.getElementById('itemReport').value = item.report || '';
+    document.getElementById('itemStamp').value = item.stamp || '';
+    document.getElementById('itemExtraNote').value = item.extraNote || '';
+    document.getElementById('itemNote').value = item.note || 'Bình thường';
+    document.getElementById('itemFileUrl').value = item.fileLink || '';
+
+    // Quản lý quyền MANAGER
+    const isManager = userRole === 'MANAGER';
+    document.getElementById('itemName').disabled = isManager;
+    document.getElementById('itemCode').readOnly = isManager;
+
+    document.getElementById('currentFile').innerHTML = item.fileLink 
+        ? `📄 <a href="${item.fileLink}" target="_blank">Xem tệp hiện tại</a>` 
+        : 'Chưa có tệp đính kèm';
+
+    document.getElementById('modalTitle').innerText = 'Cập nhật thiết bị';
+    document.getElementById('formModal').style.display = 'block';
 }
 
         function deleteItem(docIdOrId) {
