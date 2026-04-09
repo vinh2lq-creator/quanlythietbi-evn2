@@ -513,7 +513,7 @@
             }
         });
 
-        async function logAction(actionType, itemName, itemCode) {
+       async function logAction(actionType, itemName, itemCode) {
     if (!currentUser) return;
     try {
         await db.collection("logs").add({
@@ -523,10 +523,8 @@
             userEmail: currentUser.email,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
-        console.log(`✅ Log thành công: ${actionType} - ${itemCode}`);
-    } catch (e) {
-        console.error("❌ Lỗi ghi log:", e);
-    }
+        console.log(`✅ LOG: ${actionType} - ${itemCode}`);
+    } catch (e) { console.error("❌ Lỗi log:", e); }
 }
 
         function viewAuditLogs() {
@@ -585,42 +583,41 @@
             });
         }
 
-        function loadDataFromFirebase() {
+       function loadDataFromFirebase() {
+    console.log("🔄 Đang kết nối Firebase...");
+    
     db.collection("equipments").onSnapshot(snapshot => {
+        console.log(`📥 Nhận được ${snapshot.size} documents`);
+
         equipmentList = [];
         snapshot.forEach(doc => {
             const data = doc.data();
-            data.docId = doc.id;           // Quan trọng nhất
+            data.docId = doc.id;
             equipmentList.push(data);
         });
 
         equipmentList.sort((a, b) => (a.id || 0) - (b.id || 0));
 
-        console.log(`📥 Đã tải ${equipmentList.length} thiết bị từ Firebase`);
+        console.log(`✅ Đã load ${equipmentList.length} thiết bị`);
 
-        document.getElementById('manualSyncPanel').style.display = 'none';
-        document.getElementById('dashCards').style.display = 'grid';
-        document.getElementById('dashboardCharts').style.display = 'grid';
+        if (equipmentList.length === 0) {
+            document.getElementById('manualSyncPanel').style.display = 'block';
+            document.getElementById('dashCards').style.display = 'none';
+            document.getElementById('dashboardCharts').style.display = 'none';
+        } else {
+            document.getElementById('manualSyncPanel').style.display = 'none';
+            document.getElementById('dashCards').style.display = 'grid';
+            document.getElementById('dashboardCharts').style.display = 'grid';
+        }
 
         renderSidebar();
         updateView();
         populateDatalist();
-    }, error => {
-        console.error("❌ Lỗi onSnapshot:", error);
-        alert("Lỗi kết nối Firebase: " + error.message);
+    }, err => {
+        console.error("❌ Lỗi onSnapshot:", err);
+        alert("Lỗi kết nối Firebase:\n" + err.message);
     });
 }
-
-        function getWarningData() {
-            return equipmentList.filter(item => {
-                const isDamaged = (item.note === 'Hư hỏng' || item.note === 'Hư hỏng vật lý' || item.note === 'Thử nghiệm không đạt' || item.note === 'Không kiểm định được' || item.note === 'Kiểm định/ hiệu chuẩn không đạt');
-                if (isDamaged) return false;
-                if (!item.date) return false;
-                const itemDate = new Date(item.date + "T00:00:00");
-                const diffDays = Math.ceil((itemDate - today) / (1000 * 60 * 60 * 24));
-                return diffDays <= 15;
-            });
-        }
 
         function downloadWarningReport() {
             const warnings = getWarningData();
@@ -876,30 +873,26 @@
         function closeModal() { document.getElementById('formModal').style.display = 'none'; document.getElementById('btnSaveData').innerText = "Lưu thông tin"; document.getElementById('btnSaveData').disabled = false; }
 
        async function saveData() {
-    if (userRole === 'VIEWER') return alert("Bạn không có quyền!");
+    if (userRole === 'VIEWER') return;
 
     const docId = document.getElementById('firebaseDocId').value.trim();
     const name = document.getElementById('itemName').value.trim();
     const code = document.getElementById('itemCode').value.trim();
 
-    if (!name || !code) return alert("Tên thiết bị và Mã số là bắt buộc!");
+    if (!name || !code) return alert("Tên thiết bị và Mã số không được để trống!");
 
     const btn = document.getElementById('btnSaveData');
-    btn.innerText = "Đang lưu vào Firebase...";
+    btn.innerText = "Đang lưu...";
     btn.disabled = true;
 
-    const fileInput = document.getElementById('itemFileInput');
     let finalFileUrl = document.getElementById('itemFileUrl').value;
 
     try {
-        // Upload file nếu có
-        if (fileInput.files.length > 0) {
-            const file = fileInput.files[0];
+        if (document.getElementById('itemFileInput').files.length > 0) {
+            const file = document.getElementById('itemFileInput').files[0];
             const storageRef = storage.ref('bien_ban/' + Date.now() + '_' + file.name);
-            document.getElementById('uploadProgress').innerText = "Đang upload file...";
             const snapshot = await storageRef.put(file);
             finalFileUrl = await snapshot.ref.getDownloadURL();
-            document.getElementById('uploadProgress').innerHTML = "✅ File đã upload thành công";
         }
 
         const cat = getCategoryLogic(name);
@@ -916,37 +909,23 @@
             fileLink: finalFileUrl
         };
 
-        console.log("📤 Đang ghi vào Firebase. DocID:", docId || "(mới)");
-
         if (docId) {
-            // CẬP NHẬT
             await db.collection("equipments").doc(docId).set(payload, { merge: true });
             await logAction("CẬP NHẬT", name, code);
-            console.log("✅ Cập nhật thành công (Firebase xác nhận)");
         } else {
-            // THÊM MỚI
             payload.id = Date.now();
-            const newDoc = await db.collection("equipments").add(payload);
+            await db.collection("equipments").add(payload);
             await logAction("THÊM MỚI", name, code);
-            console.log("✅ Thêm mới thành công, DocID mới:", newDoc.id);
         }
 
-        // Cập nhật local ngay lập tức
-        if (docId) {
-            const index = equipmentList.findIndex(item => item.docId === docId);
-            if (index !== -1) {
-                equipmentList[index] = { ...equipmentList[index], ...payload, docId };
-            }
-        }
-
-        alert("✅ Lưu thành công! Dữ liệu đã được ghi vào hệ thống.");
+        alert("✅ Lưu thành công!");
         closeModal();
-        updateView();
-        renderSidebar();
+        // Force refresh dữ liệu
+        loadDataFromFirebase();
 
     } catch (err) {
-        console.error("❌ LỖI KHI LƯU:", err);
-        alert("❌ Lưu thất bại!\n\nChi tiết lỗi (xem console F12):\n" + err.message);
+        console.error("❌ Lỗi lưu:", err);
+        alert("❌ Lưu thất bại: " + err.message);
     } finally {
         btn.innerText = "Lưu thông tin";
         btn.disabled = false;
@@ -954,23 +933,14 @@
 }
         
        function editItem(targetDocId) {
-    if (userRole === 'VIEWER') {
-        alert("Bạn không có quyền chỉnh sửa.");
-        return;
-    }
-
+    if (userRole === 'VIEWER') return alert("Bạn không có quyền chỉnh sửa.");
+    
     const item = equipmentList.find(e => e.docId === targetDocId);
-    if (!item) {
-        alert("❌ Không tìm thấy thiết bị trên Firebase! DocID: " + targetDocId);
-        console.error("Không tìm thấy item với docId:", targetDocId);
-        return;
-    }
+    if (!item) return alert("❌ Không tìm thấy thiết bị (DocID: " + targetDocId + ")");
 
-    console.log("📝 Đang mở form chỉnh sửa:", item.code);
+    console.log("📝 Mở chỉnh sửa:", item.code);
 
     document.getElementById('firebaseDocId').value = item.docId;
-    document.getElementById('itemId').value = item.id || '';
-
     document.getElementById('itemName').value = item.name;
     document.getElementById('itemCode').value = item.code;
     document.getElementById('itemUnit').value = item.unit || 'Tổ QLLĐ';
@@ -986,8 +956,8 @@
     document.getElementById('itemCode').readOnly = isManager;
 
     document.getElementById('currentFile').innerHTML = item.fileLink 
-        ? `📄 <a href="${item.fileLink}" target="_blank" style="color:#f37021">Xem biên bản hiện tại</a>` 
-        : 'Chưa có tệp đính kèm';
+        ? `📄 <a href="${item.fileLink}" target="_blank">Xem biên bản hiện tại</a>` 
+        : 'Chưa có tệp';
 
     document.getElementById('modalTitle').innerText = 'Cập nhật thiết bị';
     document.getElementById('formModal').style.display = 'block';
