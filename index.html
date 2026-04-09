@@ -863,47 +863,80 @@
 
         function closeModal() { document.getElementById('formModal').style.display = 'none'; document.getElementById('btnSaveData').innerText = "Lưu thông tin"; document.getElementById('btnSaveData').disabled = false; }
 
-        async function saveData() {
+       async function saveData() {
             if(userRole === 'VIEWER') return;
-            const docId = document.getElementById('firebaseDocId').value, name = document.getElementById('itemName').value, code = document.getElementById('itemCode').value;
+            const docId = document.getElementById('firebaseDocId').value;
+            const name = document.getElementById('itemName').value;
+            const code = document.getElementById('itemCode').value;
+            
             if (!name || !code) return alert('Thông tin Tên thiết bị và Mã số là bắt buộc.');
-            const btnSave = document.getElementById('btnSaveData'); btnSave.innerText = "Đang xử lý..."; btnSave.disabled = true;
+            
+            const btnSave = document.getElementById('btnSaveData'); 
+            btnSave.innerText = "Đang xử lý..."; 
+            btnSave.disabled = true;
 
             const fileInput = document.getElementById('itemFileInput');
             let finalFileUrl = document.getElementById('itemFileUrl').value;
 
             try {
                 if (fileInput.files.length > 0) {
-                    const file = fileInput.files[0]; const storageRef = storage.ref('bien_ban/' + Date.now() + '_' + file.name);
-                    document.getElementById('uploadProgress').style.color = "#e74c3c"; document.getElementById('uploadProgress').innerText = "Đang tải tệp tin lên hệ thống...";
+                    const file = fileInput.files[0]; 
+                    const storageRef = storage.ref('bien_ban/' + Date.now() + '_' + file.name);
+                    document.getElementById('uploadProgress').style.color = "#e74c3c"; 
+                    document.getElementById('uploadProgress').innerText = "Đang tải tệp tin lên hệ thống...";
                     const snapshot = await storageRef.put(file);
                     finalFileUrl = await snapshot.ref.getDownloadURL();
-                    document.getElementById('uploadProgress').style.color = "#2ecc71"; document.getElementById('uploadProgress').innerText = "Đã lưu tệp tin thành công.";
+                    document.getElementById('uploadProgress').style.color = "#2ecc71"; 
+                    document.getElementById('uploadProgress').innerText = "Đã lưu tệp tin thành công.";
                 }
 
                 const cat = getCategoryLogic(name);
                 const mainCat = getMainCategoryLogic(cat);
 
-                const payload = { name: name, category: cat, mainCategory: mainCat, code: code, unit: document.getElementById('itemUnit').value, date: document.getElementById('itemDate').value, report: document.getElementById('itemReport').value, stamp: document.getElementById('itemStamp').value, note: document.getElementById('itemNote').value, extraNote: document.getElementById('itemExtraNote').value, fileLink: finalFileUrl };
+                const payload = { 
+                    name: name, category: cat, mainCategory: mainCat, code: code, 
+                    unit: document.getElementById('itemUnit').value, 
+                    date: document.getElementById('itemDate').value, 
+                    report: document.getElementById('itemReport').value, 
+                    stamp: document.getElementById('itemStamp').value, 
+                    note: document.getElementById('itemNote').value, 
+                    extraNote: document.getElementById('itemExtraNote').value, 
+                    fileLink: finalFileUrl 
+                };
                 
                 if (docId) {
+                    // Nếu có docId (nghĩa là đang SỬA)
                     await db.collection("equipments").doc(docId).update(payload);
                     logAction("CẬP NHẬT", name, code);
+                    alert("Cập nhật dữ liệu thành công!"); // Thêm thông báo
                 } else {
+                    // Nếu không có docId (nghĩa là THÊM MỚI)
                     payload.id = Date.now();
                     await db.collection("equipments").add(payload);
                     logAction("THÊM MỚI", name, code);
+                    alert("Thêm mới thiết bị thành công!"); // Thêm thông báo
                 }
                 closeModal(); 
-            } catch (err) { alert("Quá trình lưu dữ liệu thất bại: " + err.message); btnSave.innerText = "Lưu thông tin"; btnSave.disabled = false; }
+            } catch (err) { 
+                console.error("Lỗi chi tiết từ Firebase:", err);
+                alert("Quá trình lưu dữ liệu thất bại. Firebase từ chối kết nối: " + err.message); 
+                btnSave.innerText = "Lưu thông tin"; 
+                btnSave.disabled = false; 
+            }
         }
 
         function editItem(docIdOrId) {
             if(userRole === 'VIEWER') return alert("Bạn không được phân quyền để thực hiện.");
+            // Tìm chính xác item. Ưu tiên tìm theo docId (ID của Firebase)
             const item = equipmentList.find(e => e.docId === docIdOrId || e.id == docIdOrId);
+            
             if (item) {
-                document.getElementById('firebaseDocId').value = item.docId || ''; document.getElementById('itemId').value = item.id || '';
-                document.getElementById('itemName').value = item.name; document.getElementById('itemCode').value = item.code; 
+                // Gán đúng docId vào ô ẩn để hàm saveData biết đang sửa tài liệu nào
+                document.getElementById('firebaseDocId').value = item.docId || ''; 
+                document.getElementById('itemId').value = item.id || '';
+                
+                document.getElementById('itemName').value = item.name; 
+                document.getElementById('itemCode').value = item.code; 
                 
                 if (userRole === 'MANAGER') {
                     document.getElementById('itemName').disabled = true;
@@ -913,10 +946,21 @@
                     document.getElementById('itemCode').readOnly = false;
                 }
 
-                document.getElementById('itemUnit').value = item.unit; document.getElementById('itemDate').value = item.date; document.getElementById('itemReport').value = item.report || ''; document.getElementById('itemStamp').value = item.stamp || ''; document.getElementById('itemExtraNote').value = item.extraNote || ''; document.getElementById('itemNote').value = item.note;
-                document.getElementById('itemFileInput').value = ''; document.getElementById('itemFileUrl').value = item.fileLink || ''; document.getElementById('uploadProgress').innerText = '';
+                document.getElementById('itemUnit').value = item.unit; 
+                document.getElementById('itemDate').value = item.date; 
+                document.getElementById('itemReport').value = item.report || ''; 
+                document.getElementById('itemStamp').value = item.stamp || ''; 
+                document.getElementById('itemExtraNote').value = item.extraNote || ''; 
+                document.getElementById('itemNote').value = item.note;
+                document.getElementById('itemFileInput').value = ''; 
+                document.getElementById('itemFileUrl').value = item.fileLink || ''; 
+                document.getElementById('uploadProgress').innerText = '';
                 document.getElementById('currentFile').innerHTML = item.fileLink ? `Tệp tin đính kèm: <a href="${item.fileLink}" target="_blank">Xem biên bản</a>` : 'Không có tệp tin đính kèm.';
-                document.getElementById('modalTitle').innerText = 'Cập nhật trạng thái hoạt động'; document.getElementById('formModal').style.display = 'block';
+                
+                document.getElementById('modalTitle').innerText = 'Cập nhật trạng thái hoạt động'; 
+                document.getElementById('formModal').style.display = 'block';
+            } else {
+                alert("Không tìm thấy dữ liệu gốc của thiết bị này trên hệ thống!");
             }
         }
 
