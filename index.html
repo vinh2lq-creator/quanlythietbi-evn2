@@ -580,7 +580,12 @@
             db.collection("equipments").onSnapshot(snapshot => {
                 if (!snapshot.empty) {
                     equipmentList = [];
-                    snapshot.forEach(doc => { let data = doc.data(); data.docId = doc.id; equipmentList.push(data); });
+                    equipmentList = [];
+snapshot.forEach(doc => { 
+    let data = doc.data(); 
+    data.docId = doc.id; // Bắt buộc phải lấy được mã này từ Firebase
+    equipmentList.push(data); 
+});
                     equipmentList.sort((a, b) => (a.id || 0) - (b.id || 0));
                     
                     document.getElementById('manualSyncPanel').style.display = 'none';
@@ -806,6 +811,7 @@
             }
             const isDamaged = (item.note === 'Hư hỏng' || item.note === 'Thử nghiệm không đạt' || item.note === 'Không kiểm định được' || item.note === 'Kiểm định/ hiệu chuẩn không đạt');
             const displayDate = isDamaged ? '-/-/-' : (item.date ? item.date.split('-').reverse().join('/') : 'N/A');
+            
             let reportCell = item.report || '';
             if (item.report && item.fileLink) { reportCell = `<a href="${item.fileLink}" target="_blank" class="file-link">📄 ${item.report}</a>`; } 
             else if (item.fileLink && !item.report) { reportCell = `<a href="${item.fileLink}" target="_blank" class="file-link">📄 Xem tệp</a>`; }
@@ -815,9 +821,11 @@
 
             let actionButtons = '';
             if (userRole === 'ADMIN') {
-                actionButtons = `<button class="btn btn-edit" onclick="editItem('${item.docId || item.id}')">Sửa</button><button class="btn btn-danger" onclick="deleteItem('${item.docId || item.id}')">Xóa</button>`;
+                // ĐÃ XÓA '|| item.id' Ở 2 NÚT BẤM DƯỚI ĐÂY
+                actionButtons = `<button class="btn btn-edit" onclick="editItem('${item.docId}')">Sửa</button><button class="btn btn-danger" onclick="deleteItem('${item.docId}')">Xóa</button>`;
             } else if (userRole === 'MANAGER') {
-                actionButtons = `<button class="btn btn-edit" onclick="editItem('${item.docId || item.id}')">Cập nhật</button>`;
+                // ĐÃ XÓA '|| item.id' Ở NÚT BẤM DƯỚI ĐÂY
+                actionButtons = `<button class="btn btn-edit" onclick="editItem('${item.docId}')">Cập nhật</button>`;
             }
             const tdAction = userRole !== 'VIEWER' ? `<td class="manager-up">${actionButtons}</td>` : '';
 
@@ -925,44 +933,45 @@
             }
         }
 
-        function editItem(docIdOrId) {
-            if(userRole === 'VIEWER') return alert("Bạn không được phân quyền để thực hiện.");
-            // Tìm chính xác item. Ưu tiên tìm theo docId (ID của Firebase)
-            const item = equipmentList.find(e => e.docId === docIdOrId || e.id == docIdOrId);
-            
-            if (item) {
-                // Gán đúng docId vào ô ẩn để hàm saveData biết đang sửa tài liệu nào
-                document.getElementById('firebaseDocId').value = item.docId || ''; 
-                document.getElementById('itemId').value = item.id || '';
-                
-                document.getElementById('itemName').value = item.name; 
-                document.getElementById('itemCode').value = item.code; 
-                
-                if (userRole === 'MANAGER') {
-                    document.getElementById('itemName').disabled = true;
-                    document.getElementById('itemCode').readOnly = true;
-                } else {
-                    document.getElementById('itemName').disabled = false;
-                    document.getElementById('itemCode').readOnly = false;
-                }
-
-                document.getElementById('itemUnit').value = item.unit; 
-                document.getElementById('itemDate').value = item.date; 
-                document.getElementById('itemReport').value = item.report || ''; 
-                document.getElementById('itemStamp').value = item.stamp || ''; 
-                document.getElementById('itemExtraNote').value = item.extraNote || ''; 
-                document.getElementById('itemNote').value = item.note;
-                document.getElementById('itemFileInput').value = ''; 
-                document.getElementById('itemFileUrl').value = item.fileLink || ''; 
-                document.getElementById('uploadProgress').innerText = '';
-                document.getElementById('currentFile').innerHTML = item.fileLink ? `Tệp tin đính kèm: <a href="${item.fileLink}" target="_blank">Xem biên bản</a>` : 'Không có tệp tin đính kèm.';
-                
-                document.getElementById('modalTitle').innerText = 'Cập nhật trạng thái hoạt động'; 
-                document.getElementById('formModal').style.display = 'block';
-            } else {
-                alert("Không tìm thấy dữ liệu gốc của thiết bị này trên hệ thống!");
-            }
+        function editItem(targetDocId) {
+    if(userRole === 'VIEWER') return alert("Bạn không có quyền.");
+    
+    // Tìm thiết bị trong danh sách dựa vào mã docId gửi từ nút bấm
+    const item = equipmentList.find(e => e.docId === targetDocId);
+    
+    if (item) {
+        // Gán mã docId vào ô ẩn để dùng cho việc lưu
+        document.getElementById('firebaseDocId').value = item.docId; 
+        document.getElementById('itemId').value = item.id || '';
+        
+        document.getElementById('itemName').value = item.name; 
+        document.getElementById('itemCode').value = item.code; 
+        
+        if (userRole === 'MANAGER') {
+            document.getElementById('itemName').disabled = true;
+            document.getElementById('itemCode').readOnly = true;
+        } else {
+            document.getElementById('itemName').disabled = false;
+            document.getElementById('itemCode').readOnly = false;
         }
+
+        document.getElementById('itemUnit').value = item.unit; 
+        document.getElementById('itemDate').value = item.date; 
+        document.getElementById('itemReport').value = item.report || ''; 
+        document.getElementById('itemStamp').value = item.stamp || ''; 
+        document.getElementById('itemExtraNote').value = item.extraNote || ''; 
+        document.getElementById('itemNote').value = item.note;
+        document.getElementById('itemFileInput').value = ''; 
+        document.getElementById('itemFileUrl').value = item.fileLink || ''; 
+        document.getElementById('uploadProgress').innerText = '';
+        document.getElementById('currentFile').innerHTML = item.fileLink ? `Tệp tin: <a href="${item.fileLink}" target="_blank">Xem biên bản</a>` : 'Chưa có tệp.';
+        
+        document.getElementById('modalTitle').innerText = 'Cập nhật trạng thái'; 
+        document.getElementById('formModal').style.display = 'block';
+    } else {
+        alert("Lỗi: Không tìm thấy ID của thiết bị này trên máy chủ Firebase!");
+    }
+}
 
         function deleteItem(docIdOrId) {
             if(userRole !== 'ADMIN') return alert("Chỉ ADMIN mới được thực hiện chức năng này.");
