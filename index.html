@@ -804,7 +804,8 @@
                 const diffDays = Math.ceil((new Date(item.date + "T00:00:00") - today) / (1000 * 60 * 60 * 24));
                 if (diffDays < 0) { statusClass = 'bg-red'; statusText = 'Quá hạn'; } else if (diffDays <= 15) { statusClass = 'bg-yellow'; statusText = 'Sắp đến hạn'; } else { statusClass = 'bg-green'; statusText = 'Đạt chuẩn'; }
             }
-            const displayDate = item.date ? item.date.split('-').reverse().join('/') : 'N/A';
+            const isDamaged = (item.note === 'Hư hỏng' || item.note === 'Thử nghiệm không đạt' || item.note === 'Không kiểm định được' || item.note === 'Kiểm định/ hiệu chuẩn không đạt');
+            const displayDate = isDamaged ? '-/-/-' : (item.date ? item.date.split('-').reverse().join('/') : 'N/A');
             let reportCell = item.report || '';
             if (item.report && item.fileLink) { reportCell = `<a href="${item.fileLink}" target="_blank" class="file-link">📄 ${item.report}</a>`; } 
             else if (item.fileLink && !item.report) { reportCell = `<a href="${item.fileLink}" target="_blank" class="file-link">📄 Xem tệp</a>`; }
